@@ -1,0 +1,70 @@
+# lift.wsl -- a walk-triggered repeatable lift (WR Lower Lift, special
+# 88) connecting a hall to a sunken shaft below.
+#
+# How a lift works in this DSL:
+#   - the lift sector starts flush with its entrance (same floor
+#     height), so the player walks onto it like normal floor,
+#   - it's given a `tag`, which is what the trigger targets,
+#   - the trigger is an `edge{}` override (usually the edge the player
+#     crosses to step onto the platform) with `special lift` and a
+#     matching `tag`,
+#   - the game engine lowers the tagged sector to the lowest floor it
+#     finds among its neighbours, waits, then raises it back -- which
+#     is why the lift sector needs an actual lower neighbour (here,
+#     `shaft`) to have somewhere to go.
+
+map "MAP01"
+
+defaults {
+  floor_flat "FLOOR4_8"
+  ceiling_flat "CEIL3_5"
+  wall_texture "SUPPORT2"
+  middle_texture "-"
+  light 160
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (128,0)
+    (128,128)
+    (0,128)
+  }
+}
+
+# The lift platform: same floor height as the hall so the player walks
+# onto it flush. Tagged so the trigger edge below can target it.
+sector lift {
+  floor 0
+  ceiling 128
+  tag 5
+  points {
+    (128,0)
+    (256,0)
+    (256,128)
+    (128,128)
+  }
+}
+
+# A lower shaft next to the lift gives it somewhere to descend to.
+sector shaft {
+  floor -128
+  ceiling 128
+  light 96
+  points {
+    (256,0)
+    (320,0)
+    (320,128)
+    (256,128)
+  }
+}
+
+# Walking from the hall onto the lift triggers it (WR = repeatable).
+edge (128,0)-(128,128) {
+  special lift
+  tag 5
+}
+
+thing player1_start at (32,64) angle 0

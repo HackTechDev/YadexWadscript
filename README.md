@@ -185,7 +185,7 @@ tables.py        curated symbol tables
 geometry.py      AST -> LevelData (winding, vertex dedup, edge derivation, texturing)
 wadwriter.py     LevelData -> WAD bytes
 errors.py        WsParseError / WsValidationError, with source line numbers
-examples/        single_room.wsl, three_rooms.wsl
+examples/        single_room.wsl, three_rooms.wsl, lift.wsl
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py
