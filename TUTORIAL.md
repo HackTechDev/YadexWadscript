@@ -1,8 +1,9 @@
 # Didacticiel wadscript
 
 Ce didacticiel construit un petit niveau Doom II pas à pas : une pièce,
-puis un couloir relié par une porte, un monstre, et une sortie. Pour la
-référence complète de la grammaire et des tables symboliques, voir
+puis un couloir relié par une porte, un monstre, une sortie, et enfin
+un ascenseur tagué. Pour la référence complète de la grammaire et des
+tables symboliques, voir
 [README.md](README.md). Pour l'analyse du format WAD sous-jacent, voir
 [../ANALYSE_wad.md](../ANALYSE_wad.md).
 
@@ -204,6 +205,69 @@ defaults {
 Le fichier complet correspond maintenant à
 [`examples/three_rooms.wsl`](examples/three_rooms.wsl) — comparez si
 besoin.
+
+## Étape 9 — Un ascenseur (lift)
+
+Les étapes précédentes utilisaient des déclencheurs **directs** : le
+linedef de la porte ou de la sortie agit sur le secteur qu'il borde
+lui-même. Un ascenseur a besoin d'un déclencheur **tagué**, parce que
+le mur sur lequel on marche pour l'activer (l'entrée) n'est pas
+forcément le secteur qui doit bouger (la plateforme).
+
+Dans un fichier séparé `lift.wsl` (ou regardez directement
+[`examples/lift.wsl`](examples/lift.wsl)) :
+
+```
+map "MAP01"
+
+defaults {
+  wall_texture "SUPPORT2"
+}
+
+sector hall {
+  points { (0,0) (128,0) (128,128) (0,128) }
+}
+
+sector lift {
+  tag 5
+  points { (128,0) (256,0) (256,128) (128,128) }
+}
+
+sector shaft {
+  floor -128
+  light 96
+  points { (256,0) (320,0) (320,128) (256,128) }
+}
+
+edge (128,0)-(128,128) {
+  special lift
+  tag 5
+}
+
+thing player1_start at (32,64) angle 0
+```
+
+Trois points à retenir :
+
+- `sector lift { tag 5 ... }` — la plateforme est marquée d'un `tag`,
+  et son plancher (`floor`, ici la valeur par défaut 0) est **au même
+  niveau que le hall** : le joueur doit pouvoir marcher dessus comme
+  sur un sol normal avant qu'elle ne bouge.
+- `edge (128,0)-(128,128) { special lift tag 5 }` — le mur d'entrée
+  (hall → lift) porte le déclencheur. Son `tag` doit correspondre à
+  celui du secteur `lift`, pas être le secteur qu'il borde directement
+  qui bouge, mais bien celui qui partage ce tag.
+- `sector shaft` — un secteur voisin plus bas (`floor -128`) est
+  nécessaire : le moteur du jeu abaisse le secteur tagué jusqu'au plus
+  bas plancher voisin qu'il trouve. Sans voisin plus bas, l'ascenseur
+  n'aurait nulle part où descendre.
+
+Compilez et vérifiez avec `--dump-geometry` : le linedef d'entrée
+affiche `special=88 tag=5` (88 = `lift` résolu depuis la table), et le
+mur entre `lift` et `shaft` est devenu un linedef à deux côtés tout
+seul, avec la texture murale posée automatiquement côté `lift` là où
+les planchers diffèrent — exactement le même mécanisme de texturage
+automatique vu à l'étape 4.
 
 ## Quand ça casse
 

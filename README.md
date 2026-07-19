@@ -48,6 +48,22 @@ You never declare a vertex or a linedef directly. To attach a trigger
 wall, target it by its two corner coordinates with an `edge{}` block —
 the point order doesn't need to match how either sector declared it.
 
+### Direct triggers vs. tagged triggers
+
+Two different trigger patterns show up in Doom levels, and both work
+the same way here:
+
+- **Direct**: the trigger linedef's own special acts on the sector it
+  borders (or the sector it moves *into*, for a door). No `tag`
+  needed — see `door_use` in `examples/three_rooms.wsl`.
+- **Tagged**: the trigger linedef's special acts on whichever
+  sector(s) share its `tag`, which may not be the sector the trigger
+  linedef itself borders. Give the target sector a `tag` field, and
+  put the same `tag` on the `edge{}` override carrying the `special`.
+  `examples/lift.wsl` shows this for a `lift` special: the trigger
+  edge is the entrance to the platform, tagged to match the platform
+  sector so walking in lowers *that* sector, not the entrance's.
+
 ## Grammar
 
 ```
