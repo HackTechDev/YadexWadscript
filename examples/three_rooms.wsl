@@ -1,0 +1,64 @@
+# three_rooms.wsl -- start room -> hallway (via door) -> arena (monster + exit switch)
+
+map "MAP01"
+
+defaults {
+  floor_flat "FLOOR4_8"
+  ceiling_flat "CEIL3_5"
+  wall_texture "STARTAN3"
+  middle_texture "-"
+  light 160
+}
+
+sector start {
+  floor 0
+  ceiling 128
+  points {
+    (0, 0)
+    (256, 0)
+    (256, 192)
+    (0, 192)
+  }
+}
+
+sector hall {
+  floor 0
+  ceiling 112
+  light 120
+  points {
+    (256, 0)
+    (512, 0)
+    (512, 192)
+    (256, 192)
+  }
+}
+
+sector arena {
+  floor 0
+  ceiling 160
+  light 200
+  points {
+    (512, 0)
+    (768, 0)
+    (768, 192)
+    (512, 192)
+  }
+}
+
+# door between start and hall (simple direct-line door; a real map would
+# usually insert a thin dedicated door sector -- omitted here for brevity)
+edge (256,0)-(256,192) {
+  special door_use
+  texture start { upper "BIGDOOR2" middle "-" lower "-" }
+  texture hall  { upper "BIGDOOR2" middle "-" lower "-" }
+}
+
+# exit switch on arena's far (east) wall -- one-sided, arena is the only
+# bordering sector
+edge (768,0)-(768,192) {
+  special exit_level
+  texture arena { middle "SW1EXIT" }
+}
+
+thing player1_start at (32, 96) angle 90
+thing zombieman at (640, 96) angle 180
