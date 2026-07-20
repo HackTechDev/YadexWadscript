@@ -39,6 +39,15 @@ cross-loop overlap (a loop overlapping another without sharing exact
 edges) isn't detected — only each individual loop's self-intersection
 is.
 
+**Thing outside any sector** (added after the above): every `thing`'s
+`(x,y)` is now checked with a point-in-polygon test against every
+sector's already-resolved loops (holes correctly subtracted -- a
+point inside a hole with nothing declared there is outside every
+sector, same as true unbounded void), and a non-fatal warning is
+printed if it doesn't land inside any of them -- catches a stray
+coordinate that would otherwise silently place a thing in the void.
+See README.md ("How geometry is derived", step 6).
+
 ## Ergonomie du langage
 
 Relative coordinates via a new `offset` field on `sector{}`

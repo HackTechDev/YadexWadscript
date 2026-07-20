@@ -186,6 +186,33 @@ def _check_simple_polygon(points, what, line):
                     line)
 
 
+def _point_in_polygon(px, py, poly):
+    """Standard ray-casting (even-odd) test. Boundary cases can go
+    either way -- fine here, this only ever backs a non-fatal warning,
+    not a validation error."""
+    inside = False
+    n = len(poly)
+    x1, y1 = poly[-1]
+    for i in range(n):
+        x2, y2 = poly[i]
+        if (y1 > py) != (y2 > py):
+            x_intersect = x1 + (py - y1) * (x2 - x1) / (y2 - y1)
+            if px < x_intersect:
+                inside = not inside
+        x1, y1 = x2, y2
+    return inside
+
+
+def _point_in_sector(px, py, loops):
+    """`loops[0]` is the sector's outer boundary, `loops[1:]` are its
+    holes (see `holes{}`) -- a point inside a hole is outside the
+    sector, since that area belongs to whatever sits in the hole (or
+    to nothing at all)."""
+    if not _point_in_polygon(px, py, loops[0]):
+        return False
+    return not any(_point_in_polygon(px, py, hole) for hole in loops[1:])
+
+
 def _bbox(points):
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
@@ -510,6 +537,13 @@ def resolve(script, map_name_override=None):
             else _resolve_flag_set(t.flags, tables.THING_FLAG_BITS, {}, "thing", t.line)
         )
         things.append((t.x, t.y, t.angle, doomednum, flag_bits))
+
+        if not any(_point_in_sector(t.x, t.y, loops) for loops in sector_points_by_name.values()):
+            kind_desc = t.kind_ref.value if t.kind_ref.kind == "name" else f"raw {t.kind_ref.value}"
+            print(
+                f"warning: thing {kind_desc!r} at ({t.x}, {t.y}) (line {t.line}) is not "
+                f"inside any sector -- it would be invisible/unreachable in-game",
+                file=sys.stderr)
 
     if not has_player1_start:
         print(f"warning: script has no 'thing player1_start ...' -- the level has no player 1 start",

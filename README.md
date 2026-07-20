@@ -368,6 +368,12 @@ nodes — as if the script had been written out longhand.
    two-sided one gets `middle_texture` on `middle` and `wall_texture`
    on `upper`/`lower` only where the two sectors' ceiling/floor heights
    actually differ (a step needs a texture, a flush opening doesn't).
+6. **Things** resolve their symbolic kind to a doomednum and their
+   `flags` the same way a linedef `special` does, then a point-in-
+   polygon check (against every sector's already-resolved loops,
+   holes included) warns — non-fatally — if a thing doesn't actually
+   fall inside any sector. A hole with nothing declared inside it
+   counts as outside every sector, same as true unbounded void.
 
 ## Known v1 limitations
 
