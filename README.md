@@ -88,7 +88,7 @@ the same way here:
 
 ```
 script      := { statement } ;
-statement   := map_stmt | defaults_stmt | texture_preset_stmt
+statement   := map_stmt | defaults_stmt | texture_preset_stmt | include_stmt
              | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
 map_stmt      := "map" STRING ;                      -- required, exactly once
@@ -104,6 +104,12 @@ preset_field  := "upper" STRING | "lower" STRING | "middle" STRING
                 | "x_offset" INT | "y_offset" INT ;
                 -- top-level only; see "Reusable texture presets" under
                    Advanced features
+
+include_stmt  := "include" STRING ;
+                -- top-level only; the included file may itself only
+                   contain defaults_stmt/texture_preset_stmt/include_stmt
+                   -- see "Sharing conventions across scripts (include)"
+                   under Advanced features
 
 sector_stmt   := "sector" IDENT "{" { sector_field } "}" ;
 sector_field  := "floor" INT | "ceiling" INT
@@ -397,6 +403,58 @@ edge uses exactly this to avoid repeating the same texture block twice
 two sides of a door easily end up with subtly different textures if
 edited by hand).
 
+### Sharing conventions across scripts (include)
+
+`include "path.wsl"` reads another `.wsl` file and merges its
+`defaults{}` and `texture_preset{}` declarations into the current
+script, as if they'd been written out at that point — the standard way
+to keep several level scripts visually consistent (same default
+textures, same door frame preset) without copy-pasting the same block
+into every one of them:
+
+```
+# common.wsl
+defaults {
+  wall_texture "STARTAN3"
+  light 160
+}
+texture_preset door_frame {
+  upper "BIGDOOR2"
+  middle "-"
+  lower "-"
+}
+```
+
+```
+# level1.wsl
+map "MAP01"
+include "common.wsl"
+sector room { points { ... } }
+...
+```
+
+The path is resolved relative to the *including* file's own directory
+(not the current working directory), so `include` chains work
+regardless of where `wadscript.py` is invoked from. Nested `include`s
+are allowed; a cycle is a clear error rather than an infinite loop.
+
+**An included file may only contain `defaults{}`, `texture_preset{}`,
+and (nested) `include` statements** — no `map`, `sector`, `edge`,
+`thing`, or `repeat`. This is deliberate, not a v1 shortcut: it keeps
+`include` doing exactly one job (sharing conventions), so merge order
+never has to matter — unlike a sector's `offset relative_to`, which
+depends on declaration order, a `defaults{}`/`texture_preset{}` can be
+resolved regardless of where its `include` sits in the file. Exactly
+one `defaults{}` may exist across a script and everything it includes
+(direct or nested) — declaring it twice, whether both in `include`d
+files or split between an include and the main script, is an error,
+same as declaring it twice in one file.
+
+See [`examples/common.wsl`](examples/common.wsl), shared by
+[`examples/shared_level_a.wsl`](examples/shared_level_a.wsl) and
+[`examples/shared_level_b.wsl`](examples/shared_level_b.wsl) — two
+different layouts using the same defaults and door texture preset.
+
 ## How geometry is derived
 
 Two passes happen before any of this, in `parser.py`, entirely outside
@@ -484,7 +542,8 @@ warnings, zero errors.
 ```
 wadscript.py     CLI entrypoint
 lexer.py         source text -> tokens
-parser.py        tokens -> AST (also expands `repeat` and evaluates expressions)
+parser.py        tokens -> AST (also expands `repeat`, evaluates expressions,
+                 and resolves `include`)
 tables.py        curated symbol tables
 geometry.py      AST -> LevelData (offset, winding, vertex dedup, edge derivation, texturing)
 wadwriter.py     LevelData -> WAD bytes
@@ -494,7 +553,8 @@ examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.w
                  stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl,
                  dungeon_grid.wsl, offset_relative.wsl -- each isolates one
                  feature; combat_arena.wsl and vault_complex.wsl chain
-                 several together into a small level (see below)
+                 several together into a small level (see below); common.wsl
+                 + shared_level_a.wsl/shared_level_b.wsl demonstrate `include`
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py

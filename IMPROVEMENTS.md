@@ -10,14 +10,6 @@ ergonomie du langage) est sorti de ce fichier et vit dans
 [`CHANGELOG.md`](CHANGELOG.md) — ce fichier ne garde que ce qui reste
 à faire, pour rester court et à jour.
 
-## Ergonomie du langage
-
-- **`include "fichier.wsl"`.** Aucun moyen de partager un bloc
-  `defaults{}` ou des conventions communes entre plusieurs scripts —
-  chaque `.wsl` est autonome. Utile dès qu'un projet a plusieurs
-  niveaux qui doivent rester visuellement cohérents (mêmes textures
-  par défaut, même palette de secteurs).
-
 ## Génération procédurale
 
 - **Primitives aléatoires.** Le but affiché de wadscript est la

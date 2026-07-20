@@ -1,0 +1,19 @@
+# common.wsl -- shared conventions for examples/shared_level_a.wsl and
+# examples/shared_level_b.wsl (see "Sharing conventions across scripts
+# (include)" in README.md). Not meant to be compiled on its own -- an
+# included file may only contain defaults{}/texture_preset{}/include
+# statements, nothing else (no `map`, no sectors).
+
+defaults {
+  floor_flat "FLOOR4_8"
+  ceiling_flat "CEIL3_5"
+  wall_texture "STARTAN3"
+  middle_texture "-"
+  light 160
+}
+
+texture_preset door_frame {
+  upper "BIGDOOR2"
+  middle "-"
+  lower "-"
+}

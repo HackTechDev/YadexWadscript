@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 
 from errors import WsError
@@ -57,7 +58,7 @@ def main(argv=None):
 
     try:
         tokens = tokenize(source)
-        script = parse(tokens)
+        script = parse(tokens, base_dir=os.path.dirname(os.path.abspath(args.input)))
         level = resolve(script, map_name_override=args.map_name)
     except WsError as e:
         print(e.format(args.input), file=sys.stderr)

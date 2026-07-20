@@ -1,0 +1,25 @@
+# shared_level_b.wsl -- a different layout, same shared conventions as
+# shared_level_a.wsl (both `include "common.wsl"`) -- change a texture
+# or a default in one place and both levels pick it up.
+
+map "MAP02"
+include "common.wsl"
+
+sector chamber {
+  ceiling 144
+  points { (0,0) (320,0) (320,320) (0,320) }
+}
+
+edge (320,0)-(320,320) {
+  special door_walk_once
+  texture chamber { preset door_frame }
+}
+
+sector vault {
+  ceiling 128
+  points { (320,0) (448,0) (448,320) (320,320) }
+}
+
+thing player1_start at (32,32) angle east
+thing shotgun_guy at (250,250) angle west
+thing soulsphere at (384,160) angle east

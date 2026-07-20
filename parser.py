@@ -3,9 +3,16 @@
 Grammar (informal EBNF), see wadscript/README.md for the full reference:
 
     script      := { statement } ;
-    statement   := map_stmt | defaults_stmt | texture_preset_stmt
+    statement   := map_stmt | defaults_stmt | texture_preset_stmt | include_stmt
                  | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
+    include_stmt  := "include" STRING ;
+                     -- path resolved relative to the including file's own
+                        directory; the included file may itself only contain
+                        defaults_stmt/texture_preset_stmt/include_stmt (see
+                        "Sharing conventions across scripts (include)" in
+                        README.md) -- its statements are merged into this
+                        script as if written out at this point
     map_stmt      := "map" STRING ;
     defaults_stmt := "defaults" "{" { default_field } "}" ;
     texture_preset_stmt := "texture_preset" IDENT "{" { texture_field_no_preset } "}" ;
@@ -46,9 +53,11 @@ iteration) directly into the Script -- geometry.py never sees an Expr
 or a RepeatTemplate, only fully concrete int-valued AST nodes.
 """
 
+import os
 from dataclasses import dataclass, field
 
-from errors import WsParseError
+from errors import WsError, WsParseError
+from lexer import tokenize
 
 # Doom angle convention (0 = east, 90 = north, ...), shared by `offset
 # relative_to`'s direction and a thing's symbolic `angle`.
@@ -206,10 +215,12 @@ class Script:
 # ------------------------------------------------------------- parser ----
 
 class _Parser:
-    def __init__(self, tokens):
+    def __init__(self, tokens, base_dir=".", including_stack=()):
         self.tokens = tokens
         self.pos = 0
         self.repeat_vars = []   # stack of enclosing repeat loop-variable names
+        self.base_dir = base_dir             # for resolving relative `include` paths
+        self.including_stack = list(including_stack)  # resolved paths, for cycle detection
 
     def peek(self):
         return self.tokens[self.pos]
@@ -368,18 +379,26 @@ class _Parser:
 
     # -- top level --
 
-    def parse_script(self):
+    def parse_script(self, restricted=False):
+        """`restricted=True` is for an included file: only defaults/
+        texture_preset/(nested) include are allowed -- see _parse_include."""
         script = Script()
         while self.peek().kind != "EOF":
             tok = self.peek()
             if tok.kind != "IDENT":
                 raise WsParseError(f"expected a statement, got {self._describe(tok)}", tok.line)
-            if tok.value == "map":
-                self._parse_map(script)
-            elif tok.value == "defaults":
+            if tok.value == "defaults":
                 self._parse_defaults(script)
             elif tok.value == "texture_preset":
                 script.texture_presets.append(self._parse_texture_preset())
+            elif tok.value == "include":
+                self._parse_include(script)
+            elif restricted:
+                raise WsParseError(
+                    f"{tok.value!r} is not allowed in an included file -- only 'defaults', "
+                    f"'texture_preset', and nested 'include' statements are", tok.line)
+            elif tok.value == "map":
+                self._parse_map(script)
             elif tok.value == "sector":
                 script.sectors.append(_materialize_sector(self._parse_sector(), {}, []))
             elif tok.value == "edge":
@@ -393,6 +412,39 @@ class _Parser:
             else:
                 raise WsParseError(f"unknown statement {tok.value!r}", tok.line)
         return script
+
+    def _parse_include(self, script):
+        tok = self.advance()  # 'include'
+        rel_path = self.expect_string().value
+        full_path = os.path.normpath(
+            rel_path if os.path.isabs(rel_path) else os.path.join(self.base_dir, rel_path))
+
+        if full_path in self.including_stack:
+            cycle = " -> ".join(self.including_stack + [full_path])
+            raise WsParseError(f"circular 'include': {cycle}", tok.line)
+
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        except OSError as e:
+            raise WsParseError(f"cannot open included file {rel_path!r}: {e.strerror}", tok.line)
+
+        sub_parser = _Parser(
+            tokenize(source), base_dir=os.path.dirname(full_path),
+            including_stack=self.including_stack + [full_path])
+        try:
+            included = sub_parser.parse_script(restricted=True)
+        except WsError as inner:
+            loc = f"{rel_path}:{inner.line}" if inner.line is not None else rel_path
+            raise WsParseError(f"in included file {loc}: {inner.message}", tok.line) from inner
+
+        if included.defaults is not None:
+            if script.defaults is not None:
+                raise WsParseError(
+                    f"duplicate 'defaults' block (this script or one of its includes "
+                    f"already has one; {rel_path!r} defines another)", tok.line)
+            script.defaults = included.defaults
+        script.texture_presets.extend(included.texture_presets)
 
     def _parse_map(self, script):
         tok = self.advance()  # 'map'
@@ -645,5 +697,7 @@ def _materialize_stmts(body, env, index_path, script):
             raise AssertionError(kind)
 
 
-def parse(tokens):
-    return _Parser(tokens).parse_script()
+def parse(tokens, base_dir="."):
+    """`base_dir` is the directory `include` paths are resolved relative
+    to -- normally the directory of the top-level .wsl file being compiled."""
+    return _Parser(tokens, base_dir=base_dir).parse_script()

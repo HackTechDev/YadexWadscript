@@ -1,0 +1,25 @@
+# shared_level_a.wsl -- pulls its defaults{} and texture_preset from
+# common.wsl via `include`, shared with shared_level_b.wsl so both
+# levels stay visually consistent (same default textures, same door
+# frame) without repeating either declaration.
+
+map "MAP01"
+include "common.wsl"
+
+sector start {
+  points { (0,0) (256,0) (256,192) (0,192) }
+}
+
+sector hall {
+  ceiling 112
+  points { (256,0) (512,0) (512,192) (256,192) }
+}
+
+edge (256,0)-(256,192) {
+  special door_use
+  texture start { preset door_frame }
+  texture hall  { preset door_frame }
+}
+
+thing player1_start at (32,96) angle east
+thing zombieman at (400,96) angle west

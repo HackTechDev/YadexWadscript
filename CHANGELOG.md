@@ -97,3 +97,22 @@ copy-paste-drift risk this closes -- now uses `preset door_frame` on
 both sides; confirmed byte-for-byte identical resolved output
 (`--dump-geometry` diff) before/after the change. See README.md
 ("Reusable texture presets").
+
+**`include "path.wsl"`** (added after the above): merges another
+file's `defaults{}`/`texture_preset{}`/(nested) `include` statements
+into the current script, resolved relative to the *including* file's
+own directory. Implemented in parser.py by recursively tokenizing and
+parsing the included file with a `restricted=True` flag on
+`parse_script()` that rejects anything else (`map`/`sector`/`edge`/
+`thing`/`repeat`) with a clear error -- deliberately scoped to sharing
+conventions only, not general-purpose inclusion, so merge order never
+has to matter (unlike `offset relative_to`, which does depend on
+declaration order). Exactly one `defaults{}` may exist across a script
+and everything it includes; a second one anywhere is an error, same as
+today. Cycle detection via a stack of resolved include paths. Verified
+error paths: duplicate `defaults{}` (either direction), a disallowed
+statement inside an included file, a missing file, and a circular
+include -- all produce clear, nested `file:line` messages. See
+README.md ("Sharing conventions across scripts (include)") and
+`examples/common.wsl` + `examples/shared_level_a.wsl`/
+`shared_level_b.wsl` (two different levels sharing one `common.wsl`).
