@@ -87,9 +87,11 @@ Au prompt `yadex:`, tapez `e map01` pour ouvrir le niveau : vous devriez
 voir un carré avec le marine positionné dans le coin bas-gauche.
 
 **Note** : les lumps SEGS/SSECTORS/NODES/REJECT/BLOCKMAP sont
-volontairement vides (à reconstruire par un nodebuilder externe comme
-ZenNode avant de jouer dans un port source) — Yadex n'en a pas besoin
-pour éditer, ce qui en fait l'outil de vérification idéal ici.
+volontairement vides (à reconstruire par un nodebuilder externe avant
+de jouer dans un port source — par exemple
+[BSP 5.2](https://games.moria.org.uk/doom/bsp/), ou ZenNode) — Yadex
+n'en a pas besoin pour éditer, ce qui en fait l'outil de vérification
+idéal ici.
 
 ## Étape 4 — Une deuxième pièce, reliée automatiquement
 
@@ -309,5 +311,5 @@ et la section validation du plan d'origine.
 - Étendre les tables (specials, things) : `tables.py` — ce sont de
   simples dictionnaires Python, faciles à compléter.
 - Une fois le WAD généré, faites-le passer par un nodebuilder externe
-  (ZenNode, BSP...) avant de le lancer dans un port source ou
-  `doom2.exe`.
+  avant de le lancer dans un port source ou `doom2.exe` — par exemple
+  [BSP 5.2](https://games.moria.org.uk/doom/bsp/), ou ZenNode.
