@@ -143,6 +143,76 @@ def _shoelace_area2(points):
     return total
 
 
+def _orient(a, b, c):
+    val = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    return (val > 0) - (val < 0)   # 1, 0, or -1
+
+
+def _on_segment(a, b, c):
+    """c is already known collinear with a-b; is it within the a-b box?"""
+    return min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= c[1] <= max(a[1], b[1])
+
+
+def _segments_intersect(p1, p2, p3, p4):
+    o1, o2 = _orient(p1, p2, p3), _orient(p1, p2, p4)
+    o3, o4 = _orient(p3, p4, p1), _orient(p3, p4, p2)
+    if o1 != o2 and o3 != o4:
+        return True
+    if o1 == 0 and _on_segment(p1, p2, p3):
+        return True
+    if o2 == 0 and _on_segment(p1, p2, p4):
+        return True
+    if o3 == 0 and _on_segment(p3, p4, p1):
+        return True
+    if o4 == 0 and _on_segment(p3, p4, p2):
+        return True
+    return False
+
+
+def _check_simple_polygon(points, what, line):
+    """Reject a self-intersecting polygon: two non-adjacent edges that
+    cross (or overlap/touch) would silently produce invalid WAD geometry
+    -- vertices/linedefs with no coherent notion of "inside"."""
+    n = len(points)
+    for i in range(n):
+        a1, a2 = points[i], points[(i + 1) % n]
+        for j in range(i + 1, n):
+            if j == i + 1 or (i == 0 and j == n - 1):
+                continue   # adjacent edges legitimately share one endpoint
+            b1, b2 = points[j], points[(j + 1) % n]
+            if _segments_intersect(a1, a2, b1, b2):
+                raise WsValidationError(
+                    f"{what} is self-intersecting: edge {a1}-{a2} crosses edge {b1}-{b2}",
+                    line)
+
+
+def _validate_and_normalize_loop(points, what, line, invert):
+    """Check a single closed point loop (a sector's outer boundary, or
+    one of its holes) and normalize its winding. `invert` flips the
+    canonical winding -- used for holes, whose boundary must be walked
+    in the opposite rotational sense from a normal outer boundary so
+    that it comes out anti-parallel to the edges of whatever sector
+    sits inside the hole (see README.md, "Nested sectors (donuts)")."""
+    if len(points) < 3:
+        raise WsValidationError(f"{what} needs at least 3 points, got {len(points)}", line)
+    for (x, y) in points:
+        _check_range(x, INT16_MIN, INT16_MAX, "x coordinate", line)
+        _check_range(y, INT16_MIN, INT16_MAX, "y coordinate", line)
+    n = len(points)
+    for i in range(n):
+        if points[i] == points[(i + 1) % n]:
+            raise WsValidationError(
+                f"{what} has two consecutive identical points {points[i]}", line)
+    _check_simple_polygon(points, what, line)
+    area2 = _shoelace_area2(points)
+    if area2 == 0:
+        raise WsValidationError(f"{what} is degenerate (zero area / collinear points)", line)
+    normalized = list(reversed(points)) if area2 > 0 else list(points)
+    if invert:
+        normalized = list(reversed(normalized))
+    return normalized
+
+
 # -------------------------------------------------------- edge derivation
 
 class _ResolvedEdge:
@@ -166,18 +236,20 @@ class _ResolvedEdge:
 
 
 def _derive_edges(sector_points_by_name, sector_order, line_by_name):
-    """Group directed candidate edges into resolved (1- or 2-sided) edges."""
+    """Group directed candidate edges into resolved (1- or 2-sided) edges.
+    Each sector may contribute more than one closed loop (its outer
+    boundary, plus one per hole)."""
     groups = {}  # frozenset({p1,p2}) -> [(sector_name, start, end), ...] in file order
     for name in sector_order:
-        pts = sector_points_by_name[name]
-        n = len(pts)
-        for i in range(n):
-            p0, p1 = pts[i], pts[(i + 1) % n]
-            if p0 == p1:
-                raise WsValidationError(
-                    f"sector {name!r} has a zero-length edge at {p0}", line_by_name[name])
-            key = frozenset((p0, p1))
-            groups.setdefault(key, []).append((name, p0, p1))
+        for pts in sector_points_by_name[name]:
+            n = len(pts)
+            for i in range(n):
+                p0, p1 = pts[i], pts[(i + 1) % n]
+                if p0 == p1:
+                    raise WsValidationError(
+                        f"sector {name!r} has a zero-length edge at {p0}", line_by_name[name])
+                key = frozenset((p0, p1))
+                groups.setdefault(key, []).append((name, p0, p1))
 
     resolved = []
     for key, contributions in groups.items():
@@ -254,24 +326,15 @@ def resolve(script, map_name_override=None):
             raise WsValidationError(f"duplicate sector name {s.name!r}", s.line)
         seen_names.add(s.name)
 
-        if len(s.points) < 3:
-            raise WsValidationError(f"sector {s.name!r} needs at least 3 points, got {len(s.points)}", s.line)
-        for (x, y) in s.points:
-            _check_range(x, INT16_MIN, INT16_MAX, "x coordinate", s.line)
-            _check_range(y, INT16_MIN, INT16_MAX, "y coordinate", s.line)
-        n = len(s.points)
-        for i in range(n):
-            if s.points[i] == s.points[(i + 1) % n]:
-                raise WsValidationError(
-                    f"sector {s.name!r} has two consecutive identical points {s.points[i]}", s.line)
-
-        area2 = _shoelace_area2(s.points)
-        if area2 == 0:
-            raise WsValidationError(f"sector {s.name!r} is degenerate (zero area / collinear points)", s.line)
-        points = list(reversed(s.points)) if area2 > 0 else list(s.points)
+        outer = _validate_and_normalize_loop(
+            s.points, f"sector {s.name!r}", s.line, invert=False)
+        loops = [outer]
+        for i, hole in enumerate(s.holes):
+            loops.append(_validate_and_normalize_loop(
+                hole, f"sector {s.name!r} hole #{i + 1}", s.line, invert=True))
 
         sector_order.append(s.name)
-        sector_points_by_name[s.name] = points
+        sector_points_by_name[s.name] = loops
         line_by_name[s.name] = s.line
 
         floor = s.floor if s.floor is not None else default_floor
@@ -296,10 +359,11 @@ def resolve(script, map_name_override=None):
     vertex_index = {}
     vertices = []
     for name in sector_order:
-        for p in sector_points_by_name[name]:
-            if p not in vertex_index:
-                vertex_index[p] = len(vertices)
-                vertices.append(p)
+        for loop in sector_points_by_name[name]:
+            for p in loop:
+                if p not in vertex_index:
+                    vertex_index[p] = len(vertices)
+                    vertices.append(p)
 
     # -- derive one/two-sided edges from sector polygon edges --
     resolved_edges = _derive_edges(sector_points_by_name, sector_order, line_by_name)

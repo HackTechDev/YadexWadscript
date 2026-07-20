@@ -8,6 +8,7 @@ Grammar (informal EBNF), see wadscript/README.md for the full reference:
     map_stmt      := "map" STRING ;
     defaults_stmt := "defaults" "{" { default_field } "}" ;
     sector_stmt   := "sector" IDENT "{" { sector_field } "}" ;
+                     -- sector_field includes "holes" "{" { "{" point { point } "}" } "}"
     edge_stmt     := "edge" point "-" point "{" { edge_field } "}" ;
     thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" INT
                       [ "flags" "{" { IDENT } "}" ] ;
@@ -57,6 +58,7 @@ class Sector:
     special: SpecialRef = None
     tag: object = 0   # int (literal) or str (symbolic name, resolved in geometry.py)
     points: list = field(default_factory=list)  # list[(int,int)]
+    holes: list = field(default_factory=list)   # list[list[(int,int)]] -- one closed loop per hole
 
 
 @dataclass
@@ -274,6 +276,18 @@ class _Parser:
                     pts.append(self.parse_point())
                 self.expect_punct("}")
                 s.points = pts
+            elif ftok.value == "holes":
+                self.expect_punct("{")
+                holes = []
+                while not self.at_punct("}"):
+                    self.expect_punct("{")
+                    pts = []
+                    while not self.at_punct("}"):
+                        pts.append(self.parse_point())
+                    self.expect_punct("}")
+                    holes.append(pts)
+                self.expect_punct("}")
+                s.holes = holes
             else:
                 raise WsParseError(f"unknown sector field {ftok.value!r}", ftok.line)
         self.expect_punct("}")

@@ -23,17 +23,23 @@ n'est engagé tant que ce n'est pas explicitement demandé.
   `examples/stairs.wsl` (escalier), `examples/crusher.wsl` (crusher),
   `examples/secret_and_hazard.wsl` (secteurs `secret` et
   `damage_10pct`).
-
-## Validation
-
-- **Polygones auto-intersectants.** Non détectés aujourd'hui — un
-  secteur dont les arêtes se croisent produirait une géométrie WAD
-  invalide sans erreur claire à la compilation.
-- **Secteurs imbriqués ("donuts").** Limitation documentée du v1 :
-  l'algorithme de dérivation d'arêtes ne gère que l'adjacence simple,
-  pas un secteur-îlot à l'intérieur d'un autre (ex. un pilier au milieu
-  d'une pièce). Demanderait de repenser le groupement d'arêtes pour
-  distinguer un contour extérieur d'un contour intérieur.
+- **Validation.** Les deux points listés à l'origine sont faits :
+  polygones auto-intersectants détectés (test segment-par-segment,
+  appliqué à chaque boucle indépendamment — le `points{}` d'un secteur
+  et chacun de ses `holes{}` — avec une erreur claire donnant les deux
+  arêtes en cause) et secteurs imbriqués ("donuts") supportés via un
+  nouveau champ `holes{}` sur `sector{}` (une boucle fermée de plus,
+  soustraite de l'aire du secteur ; sa boucle interne est normalisée
+  avec un sens de parcours inversé par rapport à un `points{}` normal,
+  ce qui la fait automatiquement coïncider en anti-parallèle avec la
+  boucle du secteur-îlot qu'elle entoure, sans rien de spécial à faire
+  côté secteur-îlot). Vérifié avec un vrai nodebuilder (BSP 5.2) en
+  plus de `--dump-geometry` et Yadex. Voir README.md ("Nested sectors
+  (donuts)") et `examples/donut.wsl`. Limite restante, documentée dans
+  "Known v1 limitations" du README : le chevauchement entre boucles
+  (une boucle qui recouvre une autre sans partager exactement les
+  mêmes arêtes) n'est pas détecté, seule l'auto-intersection de chaque
+  boucle prise isolément l'est.
 
 ## Ergonomie du langage
 

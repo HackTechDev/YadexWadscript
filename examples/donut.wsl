@@ -1,0 +1,41 @@
+# donut.wsl -- a room with a pillar in the middle: a "nested sector"
+# (an island sector fully enclosed by another). The room declares a
+# `holes{}` loop with the exact same corner coordinates as the
+# pillar's own `points{}` -- in any point order, since winding is
+# normalized automatically either way -- and wadscript derives the
+# shared boundary as a two-sided wall between them, same as any other
+# adjacent pair of sectors.
+
+map "MAP01"
+
+defaults {
+  wall_texture "STONE2"
+}
+
+sector room {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (400,0)
+    (400,400)
+    (0,400)
+  }
+  holes {
+    { (150,150) (250,150) (250,250) (150,250) }
+  }
+}
+
+sector pillar {
+  floor 32
+  ceiling 128
+  floor_flat "FLAT5_4"
+  points {
+    (150,150)
+    (250,150)
+    (250,250)
+    (150,250)
+  }
+}
+
+thing player1_start at (32,32) angle 0

@@ -86,7 +86,8 @@ sector_field  := "floor" INT | "ceiling" INT
                 | "light" INT
                 | "special" (IDENT | "raw" INT)
                 | "tag" (INT | IDENT)
-                | "points" "{" point { point } "}" ;
+                | "points" "{" point { point } "}"
+                | "holes" "{" { "{" point { point } "}" } "}" ;
 point         := "(" INT "," INT ")" ;
 
 edge_stmt     := "edge" point "-" point "{" { edge_field } "}" ;
@@ -110,6 +111,22 @@ pass normalizes it automatically.
 Anywhere a symbolic name is expected (a linedef `special`, a `thing`
 kind), `raw <int>` bypasses the curated table entirely, e.g.
 `special raw 130` or `thing raw 3005 at (64,64) angle 0`.
+
+### Nested sectors (donuts)
+
+A sector's `holes{}` block declares one or more extra closed loops
+that are subtracted from its area — for a room with a pillar in the
+middle, the room declares a `holes{}` loop with the pillar's exact
+corner coordinates (in any point order — winding is normalized the
+same way `points{}` is, just inverted), and the pillar itself is a
+separate, ordinary sector. wadscript derives the shared boundary as a
+normal two-sided wall, exactly as it would between two side-by-side
+sectors — no special-casing needed on the pillar's side. See
+[`examples/donut.wsl`](examples/donut.wsl).
+
+A hole with no sector inside it is also valid: its edges just become
+one-sided (impassible) walls facing into unrendered void, the same as
+any other one-sided wall.
 
 ### Symbolic tags
 
@@ -208,13 +225,17 @@ you need more (it's a plain Python dict), or use `raw <int>`.
 
 ## How geometry is derived
 
-1. **Winding normalization.** Each sector's point list is reordered
-   clockwise internally (via the shoelace signed-area formula) so a
-   one-sided wall always has its owning sector on the correct side —
-   you never have to think about point order when writing a script.
-2. **Vertex table.** All (deduplicated) points across every sector
-   become the WAD's VERTEXES lump, in first-seen order.
-3. **Edge grouping.** Every sector contributes one directed edge per
+1. **Validation + winding normalization.** Each closed point loop (a
+   sector's `points{}`, and each of its `holes{}` loops) is checked
+   for at least 3 points, no zero-length edges, non-zero area, and no
+   self-intersection (two non-adjacent edges of the same loop
+   crossing or overlapping) — then reordered clockwise internally (via
+   the shoelace signed-area formula), inverted for a hole loop, so a
+   one-sided wall always has its owning sector on the correct side.
+   You never have to think about point order when writing a script.
+2. **Vertex table.** All (deduplicated) points across every sector's
+   loops become the WAD's VERTEXES lump, in first-seen order.
+3. **Edge grouping.** Every loop contributes one directed edge per
    consecutive pair of its (normalized) points. Edges are grouped by
    their two (unordered) endpoints: one contributor → one-sided wall;
    two contributors (necessarily walked in opposite directions) →
@@ -233,11 +254,14 @@ you need more (it's a plain Python dict), or use `raw <int>`.
 
 ## Known v1 limitations
 
-Not validated or supported yet: level/thing bounds beyond int16 range
-(this part *is* checked), self-intersecting polygons, nested "donut"
-sectors (an interior island sector inside another, e.g. a pillar) —
-the edge-derivation algorithm only understands simple polygon
-adjacency, not enclosure.
+Self-intersecting polygons are rejected with a clear error (checked
+per loop — a sector's `points{}` or any of its `holes{}`), and nested
+"donut" sectors are supported via `holes{}` (see above) — both were
+v1 gaps, now closed. Still not validated or supported: cross-loop
+overlap (a sector's own `holes{}` loop overlapping its outer boundary,
+or two different sectors' loops overlapping without sharing exact
+edges) is not detected — only each individual loop's self-intersection
+is checked.
 
 ## Layout
 
@@ -250,7 +274,7 @@ geometry.py      AST -> LevelData (winding, vertex dedup, edge derivation, textu
 wadwriter.py     LevelData -> WAD bytes
 errors.py        WsParseError / WsValidationError, with source line numbers
 examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl,
-                 stairs.wsl, crusher.wsl, secret_and_hazard.wsl
+                 stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py
