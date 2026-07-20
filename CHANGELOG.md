@@ -82,3 +82,18 @@ treats those four words as unknown names, so a stray direction can't
 silently mean "0" in a coordinate. Inside a `repeat` whose loop
 variable shares a direction's name, the loop variable wins (normal
 shadowing). See README.md ("Symbolic directions").
+
+**Reusable texture presets** (added after the above): a top-level
+`texture_preset <name> { upper/lower/middle/x_offset/y_offset }`
+block, referenced from a `texture{}` block with `preset <name>`. A
+preset only fills a field the `texture{}` block itself left
+unspecified -- any explicit field always wins over the preset,
+regardless of write order within the block (verified both ways).
+Presets can be declared anywhere relative to the edges using them (no
+`relative_to`-style ordering rule, since a preset never depends on
+other script state). `examples/three_rooms.wsl`'s door -- previously
+the same three-line texture block repeated once per side, the exact
+copy-paste-drift risk this closes -- now uses `preset door_frame` on
+both sides; confirmed byte-for-byte identical resolved output
+(`--dump-geometry` diff) before/after the change. See README.md
+("Reusable texture presets").

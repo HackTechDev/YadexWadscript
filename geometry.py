@@ -376,6 +376,16 @@ def resolve(script, map_name_override=None):
     ):
         _check_name_len(val, what, d.line if d else None)
 
+    # -- texture presets: order doesn't matter relative to the edges
+    # that reference them, so resolve the whole table up front --
+    texture_presets_by_name = {}
+    for p in script.texture_presets:
+        if p.name in texture_presets_by_name:
+            raise WsValidationError(f"duplicate texture_preset {p.name!r}", p.line)
+        for field_name in ("upper", "lower", "middle"):
+            _check_name_len(getattr(p, field_name), f"texture_preset {p.name!r} {field_name}", p.line)
+        texture_presets_by_name[p.name] = p
+
     # -- sectors: validate polygons, normalize winding, resolve attrs --
     seen_names = set()
     sector_order = []
@@ -465,15 +475,32 @@ def resolve(script, map_name_override=None):
                     f"sector {sector_name!r} does not border edge {ov.p1}-{ov.p2} "
                     f"(bordering sector(s): {', '.join(repr(b) for b in borders)})",
                     tex.line)
+            preset = None
+            if tex.preset_name is not None:
+                preset = texture_presets_by_name.get(tex.preset_name)
+                if preset is None:
+                    raise WsValidationError(
+                        f"unknown texture_preset {tex.preset_name!r} (no "
+                        f"'texture_preset {tex.preset_name} {{...}}' declared)",
+                        tex.line)
             for field_name in ("upper", "lower", "middle"):
+                # tex's own explicit field wins; the preset (if any) only
+                # fills a field tex itself left unset -- order-independent
+                # within the texture{} block.
                 val = getattr(tex, field_name)
+                if val is None and preset is not None:
+                    val = getattr(preset, field_name)
                 if val is not None:
                     _check_name_len(val, f"texture {field_name}", tex.line)
                     slot[field_name] = val
             if tex.x_offset is not None:
                 slot["x_offset"] = tex.x_offset
+            elif preset is not None and preset.x_offset is not None:
+                slot["x_offset"] = preset.x_offset
             if tex.y_offset is not None:
                 slot["y_offset"] = tex.y_offset
+            elif preset is not None and preset.y_offset is not None:
+                slot["y_offset"] = preset.y_offset
 
     # -- texture defaulting for anything an override didn't set --
     for e in resolved_edges:

@@ -87,7 +87,8 @@ the same way here:
 
 ```
 script      := { statement } ;
-statement   := map_stmt | defaults_stmt | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
+statement   := map_stmt | defaults_stmt | texture_preset_stmt
+             | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
 map_stmt      := "map" STRING ;                      -- required, exactly once
 
@@ -96,6 +97,12 @@ default_field := "floor" INT | "ceiling" INT
                 | "floor_flat" STRING | "ceiling_flat" STRING
                 | "wall_texture" STRING | "middle_texture" STRING
                 | "light" INT ;
+
+texture_preset_stmt := "texture_preset" IDENT "{" { preset_field } "}" ;
+preset_field  := "upper" STRING | "lower" STRING | "middle" STRING
+                | "x_offset" INT | "y_offset" INT ;
+                -- top-level only; see "Reusable texture presets" under
+                   Advanced features
 
 sector_stmt   := "sector" IDENT "{" { sector_field } "}" ;
 sector_field  := "floor" INT | "ceiling" INT
@@ -115,7 +122,10 @@ edge_field    := "special" (IDENT | "raw" INT)
                 | "flags" "{" { IDENT } "}"
                 | "texture" IDENT "{" { texture_field } "}" ;   -- IDENT = name of a bordering sector
 texture_field := "upper" STRING | "lower" STRING | "middle" STRING
-                | "x_offset" INT | "y_offset" INT ;
+                | "x_offset" INT | "y_offset" INT
+                | "preset" IDENT ;   -- name of a texture_preset; fields
+                                        above still win over the preset,
+                                        regardless of write order
 
 thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" angle_expr
                   [ "flags" "{" { IDENT } "}" ] ;
@@ -348,6 +358,43 @@ symbolic tag name is used only once in the entire script — meaning
 nothing else in the script shares it — that's almost certainly a typo
 on the other side, so a warning is printed (not a hard error, since a
 one-off named tag isn't strictly invalid, just unusual).
+
+### Reusable texture presets
+
+A top-level `texture_preset <name> { ... }` block declares a named set
+of `upper`/`lower`/`middle`/`x_offset`/`y_offset` values, referenced
+from a `texture{}` block with `preset <name>` instead of (or alongside)
+writing the fields out directly:
+
+```
+texture_preset door_frame {
+  upper "BIGDOOR2"
+  middle "-"
+  lower "-"
+}
+
+edge (256,0)-(256,192) {
+  special door_use
+  texture start { preset door_frame }
+  texture hall  { preset door_frame }
+}
+```
+
+A preset only fills whatever a `texture{}` block leaves unspecified —
+any `upper`/`lower`/`middle`/`x_offset`/`y_offset` written explicitly
+in the same block always wins over the preset, **regardless of which
+comes first in the source** (`texture hall { preset door_frame upper
+"BIGDOOR1" }` and `texture hall { upper "BIGDOOR1" preset door_frame }`
+resolve identically). A `texture_preset` can be declared anywhere in
+the script relative to the edges that use it — unlike `offset
+relative_to`, there's no "must come first" ordering rule, since a
+preset never depends on anything else being resolved yet.
+
+See [`examples/three_rooms.wsl`](examples/three_rooms.wsl), whose door
+edge uses exactly this to avoid repeating the same texture block twice
+(previously the most common copy-paste-drift spot in a script — the
+two sides of a door easily end up with subtly different textures if
+edited by hand).
 
 ## How geometry is derived
 

@@ -3,10 +3,14 @@
 Grammar (informal EBNF), see wadscript/README.md for the full reference:
 
     script      := { statement } ;
-    statement   := map_stmt | defaults_stmt | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
+    statement   := map_stmt | defaults_stmt | texture_preset_stmt
+                 | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
     map_stmt      := "map" STRING ;
     defaults_stmt := "defaults" "{" { default_field } "}" ;
+    texture_preset_stmt := "texture_preset" IDENT "{" { texture_field_no_preset } "}" ;
+                     -- top-level only (not valid inside `repeat`); order
+                        relative to the edges that reference it doesn't matter
     sector_stmt   := "sector" IDENT "{" { sector_field } "}" ;
                      -- sector_field includes "holes" "{" { "{" point { point } "}" } "}"
                         and "offset" (point | "relative_to" IDENT DIRECTION INT)
@@ -149,6 +153,22 @@ class TextureOverride:
     middle: str = None
     x_offset: int = None
     y_offset: int = None
+    preset_name: str = None   # `preset <name>` -- fills any field above still None
+
+
+@dataclass
+class TexturePreset:
+    """A top-level `texture_preset <name> { ... }` -- the same fields as
+    a TextureOverride minus sector_name/preset_name (no nested presets).
+    Applied in geometry.py as a fallback layer beneath a texture{}
+    block's own explicit fields, order-independent within the block."""
+    line: int
+    name: str
+    upper: str = None
+    lower: str = None
+    middle: str = None
+    x_offset: int = None
+    y_offset: int = None
 
 
 @dataclass
@@ -177,6 +197,7 @@ class Script:
     map_name: str = None
     map_line: int = None
     defaults: Defaults = None
+    texture_presets: list = field(default_factory=list)
     sectors: list = field(default_factory=list)
     edges: list = field(default_factory=list)
     things: list = field(default_factory=list)
@@ -357,6 +378,8 @@ class _Parser:
                 self._parse_map(script)
             elif tok.value == "defaults":
                 self._parse_defaults(script)
+            elif tok.value == "texture_preset":
+                script.texture_presets.append(self._parse_texture_preset())
             elif tok.value == "sector":
                 script.sectors.append(_materialize_sector(self._parse_sector(), {}, []))
             elif tok.value == "edge":
@@ -397,6 +420,24 @@ class _Parser:
                 raise WsParseError(f"unknown defaults field {ftok.value!r}", ftok.line)
         self.expect_punct("}")
         script.defaults = d
+
+    def _parse_texture_preset(self):
+        tok = self.advance()  # 'texture_preset'
+        name = self.expect_ident().value
+        p = TexturePreset(line=tok.line, name=name)
+        self.expect_punct("{")
+        seen = set()
+        while not self.at_punct("}"):
+            ftok = self.expect_ident()
+            self._check_dup(seen, ftok.value, ftok.line)
+            if ftok.value in ("upper", "lower", "middle"):
+                setattr(p, ftok.value, self.expect_string().value)
+            elif ftok.value in ("x_offset", "y_offset"):
+                setattr(p, ftok.value, self.expect_int().value)
+            else:
+                raise WsParseError(f"unknown texture_preset field {ftok.value!r}", ftok.line)
+        self.expect_punct("}")
+        return p
 
     def _parse_sector(self):
         tok = self.advance()  # 'sector'
@@ -485,6 +526,8 @@ class _Parser:
                 setattr(t, ftok.value, self.expect_string().value)
             elif ftok.value in ("x_offset", "y_offset"):
                 setattr(t, ftok.value, self.expect_int().value)
+            elif ftok.value == "preset":
+                t.preset_name = self.expect_ident().value
             else:
                 raise WsParseError(f"unknown texture field {ftok.value!r}", ftok.line)
         self.expect_punct("}")

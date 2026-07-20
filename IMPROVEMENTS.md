@@ -12,14 +12,6 @@ ergonomie du langage) est sorti de ce fichier et vit dans
 
 ## Ergonomie du langage
 
-- **Presets de texture réutilisables.** Chaque porte dans les exemples
-  répète le même bloc `texture <secteur> { upper "BIGDOOR2" middle "-"
-  lower "-" }` une fois par secteur bordant (voir
-  `examples/three_rooms.wsl`). Un preset nommé, défini une fois
-  (`texture_preset door_frame { upper "BIGDOOR2" middle "-" lower "-"
-  }`) et référencé par nom sur chaque bord réduirait la répétition et
-  les incohérences de copier-coller entre les deux côtés d'une même
-  porte.
 - **`include "fichier.wsl"`.** Aucun moyen de partager un bloc
   `defaults{}` ou des conventions communes entre plusieurs scripts —
   chaque `.wsl` est autonome. Utile dès qu'un projet a plusieurs

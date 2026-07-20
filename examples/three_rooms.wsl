@@ -10,6 +10,14 @@ defaults {
   light 160
 }
 
+# Reused by both sides of the door below via `preset door_frame` --
+# see "Reusable texture presets" in README.md.
+texture_preset door_frame {
+  upper "BIGDOOR2"
+  middle "-"
+  lower "-"
+}
+
 sector start {
   floor 0
   ceiling 128
@@ -49,8 +57,8 @@ sector arena {
 # usually insert a thin dedicated door sector -- omitted here for brevity)
 edge (256,0)-(256,192) {
   special door_use
-  texture start { upper "BIGDOOR2" middle "-" lower "-" }
-  texture hall  { upper "BIGDOOR2" middle "-" lower "-" }
+  texture start { preset door_frame }
+  texture hall  { preset door_frame }
 }
 
 # exit switch on arena's far (east) wall -- one-sided, arena is the only
