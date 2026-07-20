@@ -6,6 +6,14 @@ Standalone Python 3 tool, stdlib only, unrelated to Yadex's own C++
 code or build — it just lives in this repo because Yadex is a
 convenient way to load and inspect the WAD files it produces.
 
+**Contents**: [Quick start](#quick-start) ·
+[The idea](#the-idea) ·
+[Language reference](#language-reference) ·
+[Advanced features](#advanced-features) ·
+[How geometry is derived](#how-geometry-is-derived) ·
+[Known v1 limitations](#known-v1-limitations) ·
+[Layout](#layout)
+
 ## Quick start
 
 ```sh
@@ -75,7 +83,7 @@ the same way here:
   edge is the entrance to the platform, tagged to match the platform
   sector so walking in lowers *that* sector, not the entrance's.
 
-## Grammar
+## Language reference
 
 ```
 script      := { statement } ;
@@ -113,10 +121,12 @@ thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" expr
                   [ "flags" "{" { IDENT } "}" ] ;
 
 repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}" ;
+                 -- see "Repeated geometry (repeat)" under Advanced features
 
 expr          := term { ("+" | "-") term } ;
 term          := unary { "*" unary } ;
 unary         := "-" unary | INT | IDENT | "(" expr ")" ;
+                 -- a bare IDENT is only legal inside a repeat_stmt body
 ```
 
 Comments start with `#` and run to end of line. Points may be listed in
@@ -128,6 +138,102 @@ pass normalizes it automatically.
 Anywhere a symbolic name is expected (a linedef `special`, a `thing`
 kind), `raw <int>` bypasses the curated table entirely, e.g.
 `special raw 130` or `thing raw 3005 at (64,64) angle 0`.
+
+### Defaults
+
+`defaults{}` is optional; every field inside it is optional. Baseline
+fallbacks if a field (or the whole block) is absent:
+
+| Field | Fallback |
+|---|---|
+| `floor` | 0 |
+| `ceiling` | 128 |
+| `floor_flat` | `"FLOOR4_8"` |
+| `ceiling_flat` | `"CEIL3_5"` |
+| `wall_texture` | `"STARTAN3"` |
+| `middle_texture` | `"-"` |
+| `light` | 160 |
+
+A `sector{}` block falls back to `defaults{}` for any field it omits.
+A `thing`'s `flags` default to `easy|medium|hard` (appears on all
+skills, all game modes) when omitted.
+
+### Curated symbol tables
+
+All numeric IDs below are cross-checked against `ygd/doom2.ygd`
+(Yadex's own Doom II/Final Doom game-definition file), not guessed.
+Entries tagged `[Boom]` need a Boom-compatible source port (nearly all
+modern ones are) rather than strict vanilla `doom2.exe` — the WAD
+binary layout is identical either way, only which port interprets the
+special number differs. The full, authoritative list with every name
+is `wadscript/tables.py` — read it directly rather than this summary
+when you need an exact name; use `raw <int>` for anything it doesn't
+cover.
+
+**Linedef specials** (`tables.py::LINEDEF_SPECIALS`, 44 entries):
+doors (18 — `door_use`, `door_walk_once`, open/close/stay-open in every
+trigger-method combination, plus `door_use_blue_key`/`_yellow_key`/
+`_red_key`), lifts (3 — `lift`, `lift_switch`, `lift_switch_once`),
+stairs (4 — `stairs_walk_once`, `stairs_switch_once`, and turbo
+variants; see [`examples/stairs.wsl`](examples/stairs.wsl)), crushers
+(5 — `crusher_start_walk_once`/`_walk`/`_start_slow_walk`,
+`crusher_stop_walk_once`/`_walk`; see
+[`examples/crusher.wsl`](examples/crusher.wsl)), light effects
+(9 — `light_blink_walk_once`, `light_to_max_*`, `light_to_dim_*`,
+`light_to_brightest_neighbor_walk_once`, etc.), exits (2 —
+`exit_level`, `exit_secret`), teleporters (3 — `teleport`,
+`teleport_switch`, `teleport_switch_once` `[Boom]`).
+
+**Thing types** (`tables.py::THING_TYPES`, 100 entries): players/
+markers (6, including `teleport_exit`), monsters (21 — every Doom II
+monster except the source-port-specific mkII sprites, e.g.
+`spectre`, `cacodemon`, `baron_of_hell`, `revenant`, `arch_vile`,
+`cyberdemon`, `spider_mastermind`), weapons (7), ammo (9), health &
+armor (8), keys (6, including skull keys), misc. bonus items (8),
+decorations & obstacles (14 — pillars, torches' bases, barrels,
+`commander_keen`...), corpses/gore (9), light sources (12 — lamps,
+candles, torches).
+
+**Sector types** (`tables.py::SECTOR_SPECIALS`, 15 entries): `secret`;
+damaging floors `damage_5pct`/`_10pct`/`_20pct`/`_20pct_strobe`/
+`_20pct_end_level`; light effects `light_blink_random`,
+`light_strobe_fast`/`_slow` (and `_sync` variants), `light_glow`,
+`light_flicker_random`; timed ceiling movement `door_close_30s`,
+`door_open_300s`. Set directly on the `sector{}` block, not on a
+trigger edge — see
+[`examples/secret_and_hazard.wsl`](examples/secret_and_hazard.wsl).
+
+**Thing flags** (`THING_FLAG_BITS`): `easy`, `medium`, `hard`, `ambush`,
+`not_sp`, `not_dm`, `not_coop`.
+
+**Edge flags** (`LINEDEF_FLAG_BITS`): `block_monsters`, `secret`,
+`block_sound`, `hidden` (never on automap), `mapped` (always on
+automap), `upper_unpegged`, `lower_unpegged`. `impassible` and
+`two_sided` are reserved — computed automatically, never settable.
+
+These tables only cover common cases; extend `tables.py` directly if
+you need more (it's a plain Python dict), or use `raw <int>`.
+
+## Advanced features
+
+Everything below is opt-in — none of it is needed for the basic
+sector/edge/thing scripts shown above.
+
+### Checking textures against a real IWAD
+
+Texture/flat names are otherwise just opaque strings to wadscript — a
+truncation-to-8-characters check (`_check_name_len`), nothing more.
+`--check-textures <iwad>` (see [Quick start](#quick-start)) closes
+that gap: `texcheck.py` reads a WAD's `TEXTURE1`/`TEXTURE2` lumps
+(each texture record starts with an 8-byte name — no need to
+cross-reference `PNAMES` at all for just the names) and the lump names
+between `F_START`/`FF_START` and `F_END`/`FF_END` (flats have no
+lump-internal structure worth parsing — the lump name *is* the flat
+name), then warns for every `wall_texture`/`middle_texture`/
+upper/lower/middle/`floor_flat`/`ceiling_flat` the script uses that
+isn't in either set. Non-fatal by design — a WAD referencing textures
+supplied by a different PWAD than the one you happened to check
+against is legitimate, so this is a linting aid, not a gate.
 
 ### Nested sectors (donuts)
 
@@ -223,81 +329,6 @@ nothing else in the script shares it — that's almost certainly a typo
 on the other side, so a warning is printed (not a hard error, since a
 one-off named tag isn't strictly invalid, just unusual).
 
-### Defaults
-
-`defaults{}` is optional; every field inside it is optional. Baseline
-fallbacks if a field (or the whole block) is absent:
-
-| Field | Fallback |
-|---|---|
-| `floor` | 0 |
-| `ceiling` | 128 |
-| `floor_flat` | `"FLOOR4_8"` |
-| `ceiling_flat` | `"CEIL3_5"` |
-| `wall_texture` | `"STARTAN3"` |
-| `middle_texture` | `"-"` |
-| `light` | 160 |
-
-A `sector{}` block falls back to `defaults{}` for any field it omits.
-A `thing`'s `flags` default to `easy|medium|hard` (appears on all
-skills, all game modes) when omitted.
-
-### Curated symbol tables
-
-All numeric IDs below are cross-checked against `ygd/doom2.ygd`
-(Yadex's own Doom II/Final Doom game-definition file), not guessed.
-Entries tagged `[Boom]` need a Boom-compatible source port (nearly all
-modern ones are) rather than strict vanilla `doom2.exe` — the WAD
-binary layout is identical either way, only which port interprets the
-special number differs. The full, authoritative list with every name
-is `wadscript/tables.py` — read it directly rather than this summary
-when you need an exact name; use `raw <int>` for anything it doesn't
-cover.
-
-**Linedef specials** (`tables.py::LINEDEF_SPECIALS`, 44 entries):
-doors (18 — `door_use`, `door_walk_once`, open/close/stay-open in every
-trigger-method combination, plus `door_use_blue_key`/`_yellow_key`/
-`_red_key`), lifts (3 — `lift`, `lift_switch`, `lift_switch_once`),
-stairs (4 — `stairs_walk_once`, `stairs_switch_once`, and turbo
-variants; see [`examples/stairs.wsl`](examples/stairs.wsl)), crushers
-(5 — `crusher_start_walk_once`/`_walk`/`_start_slow_walk`,
-`crusher_stop_walk_once`/`_walk`; see
-[`examples/crusher.wsl`](examples/crusher.wsl)), light effects
-(9 — `light_blink_walk_once`, `light_to_max_*`, `light_to_dim_*`,
-`light_to_brightest_neighbor_walk_once`, etc.), exits (2 —
-`exit_level`, `exit_secret`), teleporters (3 — `teleport`,
-`teleport_switch`, `teleport_switch_once` `[Boom]`).
-
-**Thing types** (`tables.py::THING_TYPES`, 100 entries): players/
-markers (6, including `teleport_exit`), monsters (21 — every Doom II
-monster except the source-port-specific mkII sprites, e.g.
-`spectre`, `cacodemon`, `baron_of_hell`, `revenant`, `arch_vile`,
-`cyberdemon`, `spider_mastermind`), weapons (7), ammo (9), health &
-armor (8), keys (6, including skull keys), misc. bonus items (8),
-decorations & obstacles (14 — pillars, torches' bases, barrels,
-`commander_keen`...), corpses/gore (9), light sources (12 — lamps,
-candles, torches).
-
-**Sector types** (`tables.py::SECTOR_SPECIALS`, 15 entries): `secret`;
-damaging floors `damage_5pct`/`_10pct`/`_20pct`/`_20pct_strobe`/
-`_20pct_end_level`; light effects `light_blink_random`,
-`light_strobe_fast`/`_slow` (and `_sync` variants), `light_glow`,
-`light_flicker_random`; timed ceiling movement `door_close_30s`,
-`door_open_300s`. Set directly on the `sector{}` block, not on a
-trigger edge — see
-[`examples/secret_and_hazard.wsl`](examples/secret_and_hazard.wsl).
-
-**Thing flags** (`THING_FLAG_BITS`): `easy`, `medium`, `hard`, `ambush`,
-`not_sp`, `not_dm`, `not_coop`.
-
-**Edge flags** (`LINEDEF_FLAG_BITS`): `block_monsters`, `secret`,
-`block_sound`, `hidden` (never on automap), `mapped` (always on
-automap), `upper_unpegged`, `lower_unpegged`. `impassible` and
-`two_sided` are reserved — computed automatically, never settable.
-
-These tables only cover common cases; extend `tables.py` directly if
-you need more (it's a plain Python dict), or use `raw <int>`.
-
 ## How geometry is derived
 
 Two passes happen before any of this, in `parser.py`, entirely outside
@@ -366,4 +397,12 @@ examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.w
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py
+IMPROVEMENTS.md  backlog of not-yet-implemented ideas
+CHANGELOG.md     history of what was implemented from that backlog, and why
+TUTORIAL.md      step-by-step guide (French)
 ```
+
+Implementation history (what's been added since v1 and why) lives in
+[`CHANGELOG.md`](CHANGELOG.md) — this README only documents current
+behavior, not how it got here. Future work (not yet implemented) is
+tracked in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
