@@ -117,8 +117,11 @@ edge_field    := "special" (IDENT | "raw" INT)
 texture_field := "upper" STRING | "lower" STRING | "middle" STRING
                 | "x_offset" INT | "y_offset" INT ;
 
-thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" expr
+thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" angle_expr
                   [ "flags" "{" { IDENT } "}" ] ;
+angle_expr    := expr ;   -- but a bare `direction` is also a legal atom here
+                             (unlike in a plain `expr`) -- see "Symbolic
+                             directions" under Advanced features
 
 repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}" ;
                  -- see "Repeated geometry (repeat)" under Advanced features
@@ -270,6 +273,23 @@ coordinate:
 `relative_to` can only reference a sector declared earlier in the
 script (its bounding box has to already be known) — referencing a
 later or nonexistent sector is an error.
+
+### Symbolic directions
+
+A `thing`'s `angle` accepts the same `east`/`north`/`west`/`south`
+vocabulary `offset relative_to` uses for directions, following Doom's
+own convention (`east` = 0°, `north` = 90°, `west` = 180°,
+`south` = 270°) — `thing zombieman at (64,64) angle north` instead of
+having to remember that 0° faces east. A direction is a full
+expression atom in this one spot, so it composes with arithmetic too:
+`angle north + 45` is a diagonal facing, `angle west - 10` etc.
+
+Directions are *only* recognized in `angle` — `points{}`, `offset`,
+and every other expression context still treat `east`/`north`/`west`/
+`south` as unknown names (an error), to avoid a stray direction word
+silently meaning "0" in a coordinate. Inside a `repeat` whose loop
+variable happens to be named `east` (or another direction word), the
+loop variable wins — normal shadowing, not an error.
 
 ### Repeated geometry (repeat)
 

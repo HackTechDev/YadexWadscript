@@ -9,6 +9,9 @@
 # (`cell` -> `cell_0_0`, `cell_0_1`, ... `cell_2_2`), which is why
 # `cell` doesn't need to (and can't) be referenced directly elsewhere
 # in the script.
+#
+# Things below use symbolic directions (`angle east`/`angle west`)
+# instead of raw degrees.
 
 map "MAP01"
 
@@ -29,6 +32,6 @@ repeat i 3 {
   }
 }
 
-thing player1_start at (64,64) angle 0
-thing zombieman at (320,320) angle 0
-thing soulsphere at (64,320) angle 0
+thing player1_start at (64,64) angle east
+thing zombieman at (320,320) angle west
+thing soulsphere at (64,320) angle east

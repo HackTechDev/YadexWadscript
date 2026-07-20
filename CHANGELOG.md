@@ -71,3 +71,14 @@ textures against a real IWAD") and `examples/offset_relative.wsl`,
 Deliberate restriction: only coordinates are expression-capable (not
 `floor`/`ceiling`/`tag`/textures), so `repeat` stays a geometry-layout
 tool rather than a general templating language.
+
+**Symbolic directions for `angle`** (added after the above): a
+`thing`'s `angle` now accepts `east`/`north`/`west`/`south` (0°/90°/
+180°/270°, Doom's own convention), the same vocabulary `offset
+relative_to` already used for directions -- and composes with
+arithmetic (`angle north + 45`). Deliberately scoped to `angle` only:
+every other expression context (`points{}`, `offset`, tags...) still
+treats those four words as unknown names, so a stray direction can't
+silently mean "0" in a coordinate. Inside a `repeat` whose loop
+variable shares a direction's name, the loop variable wins (normal
+shadowing). See README.md ("Symbolic directions").

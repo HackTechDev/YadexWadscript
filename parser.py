@@ -11,8 +11,11 @@ Grammar (informal EBNF), see wadscript/README.md for the full reference:
                      -- sector_field includes "holes" "{" { "{" point { point } "}" } "}"
                         and "offset" (point | "relative_to" IDENT DIRECTION INT)
     edge_stmt     := "edge" point "-" point "{" { edge_field } "}" ;
-    thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" expr
+    thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" angle_expr
                       [ "flags" "{" { IDENT } "}" ] ;
+    angle_expr    := expr ;   -- but a bare DIRECTION is also a legal atom here
+                                 (east=0, north=90, west=180, south=270), unlike
+                                 in a plain `expr` (points, offset, tags...)
     repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}" ;
                      -- IDENT is the loop variable, bound to 0..INT-1 in each
                         iteration; usable inside `expr`s in the body (including
@@ -42,6 +45,10 @@ or a RepeatTemplate, only fully concrete int-valued AST nodes.
 from dataclasses import dataclass, field
 
 from errors import WsParseError
+
+# Doom angle convention (0 = east, 90 = north, ...), shared by `offset
+# relative_to`'s direction and a thing's symbolic `angle`.
+DIRECTION_ANGLES = {"east": 0, "north": 90, "west": 180, "south": 270}
 
 
 # ---------------------------------------------------------------- AST ----
@@ -242,43 +249,48 @@ class _Parser:
         self.expect_punct(")")
         return (x, y)
 
-    def parse_expr(self):
-        node = self.parse_term()
+    def parse_expr(self, allow_directions=False):
+        node = self.parse_term(allow_directions)
         while self.at_punct("+") or self.at_punct("-"):
             op = self.advance().value
-            rhs = self.parse_term()
+            rhs = self.parse_term(allow_directions)
             node = Expr("add" if op == "+" else "sub", node, rhs)
         return node
 
-    def parse_term(self):
-        node = self.parse_unary()
+    def parse_term(self, allow_directions=False):
+        node = self.parse_unary(allow_directions)
         while self.at_punct("*"):
             self.advance()
-            rhs = self.parse_unary()
+            rhs = self.parse_unary(allow_directions)
             node = Expr("mul", node, rhs)
         return node
 
-    def parse_unary(self):
+    def parse_unary(self, allow_directions=False):
         if self.at_punct("-"):
             self.advance()
-            return Expr("neg", self.parse_unary())
-        return self.parse_atom()
+            return Expr("neg", self.parse_unary(allow_directions))
+        return self.parse_atom(allow_directions)
 
-    def parse_atom(self):
+    def parse_atom(self, allow_directions=False):
         tok = self.peek()
         if tok.kind == "INT":
             self.advance()
             return Expr("const", tok.value)
         if tok.kind == "IDENT":
+            if (allow_directions and tok.value in DIRECTION_ANGLES
+                    and tok.value not in self.repeat_vars):
+                self.advance()
+                return Expr("const", DIRECTION_ANGLES[tok.value])
             if tok.value not in self.repeat_vars:
                 raise WsParseError(
-                    f"unknown name {tok.value!r} in an expression (expected a number, or "
-                    f"an enclosing 'repeat' loop variable)", tok.line)
+                    f"unknown name {tok.value!r} in an expression (expected a number, "
+                    + ("a direction (east/north/west/south), " if allow_directions else "")
+                    + "or an enclosing 'repeat' loop variable)", tok.line)
             self.advance()
             return Expr("var", tok.value)
         if tok.kind == "PUNCT" and tok.value == "(":
             self.advance()
-            node = self.parse_expr()
+            node = self.parse_expr(allow_directions)
             self.expect_punct(")")
             return node
         raise WsParseError(f"expected a number or expression, got {self._describe(tok)}", tok.line)
@@ -313,7 +325,7 @@ class _Parser:
         self.expect_ident("relative_to")
         anchor = self.expect_ident().value
         dir_tok = self.expect_ident()
-        if dir_tok.value not in ("east", "west", "north", "south"):
+        if dir_tok.value not in DIRECTION_ANGLES:
             raise WsParseError(
                 f"expected a direction (east/west/north/south), got {dir_tok.value!r}", dir_tok.line)
         gap = self.expect_int().value
@@ -484,7 +496,7 @@ class _Parser:
         self.expect_ident("at")
         x, y = self.parse_point()
         self.expect_ident("angle")
-        angle = self.parse_expr()
+        angle = self.parse_expr(allow_directions=True)
         flags = None
         if self.at_ident("flags"):
             self.advance()

@@ -12,12 +12,6 @@ ergonomie du langage) est sorti de ce fichier et vit dans
 
 ## Ergonomie du langage
 
-- **Angles symboliques.** `angle` n'accepte qu'une expression
-  numérique (0-359) ; `offset relative_to` a déjà introduit le
-  vocabulaire `east`/`west`/`north`/`south` pour les directions. Le
-  réutiliser pour `angle` (`angle east` → 0, `angle north` → 90, etc.)
-  serait cohérent et éviterait de se souvenir que 0° pointe vers l'est
-  en convention Doom.
 - **Presets de texture réutilisables.** Chaque porte dans les exemples
   répète le même bloc `texture <secteur> { upper "BIGDOOR2" middle "-"
   lower "-" }` une fois par secteur bordant (voir
