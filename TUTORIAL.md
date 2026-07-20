@@ -269,6 +269,14 @@ seul, avec la texture murale posée automatiquement côté `lift` là où
 les planchers diffèrent — exactement le même mécanisme de texturage
 automatique vu à l'étape 4.
 
+**Astuce** : `tag 5` peut être remplacé par un nom, par exemple `tag
+lift_ouest`, aussi bien sur le `sector{}` que sur l'`edge{}` — wadscript
+lui assigne un entier tout seul (cohérent entre les deux endroits), et
+avertit si ce nom n'apparaît qu'une seule fois dans le script (signe
+probable d'une faute de frappe entre les deux). Voir
+[`examples/lift_symbolic_tag.wsl`](examples/lift_symbolic_tag.wsl) et
+la section "Symbolic tags" de [README.md](README.md).
+
 ## Quand ça casse
 
 wadscript refuse d'écrire un WAD tant qu'il reste une erreur, et

@@ -55,7 +55,7 @@ class Sector:
     ceiling_flat: str = None
     light: int = None
     special: SpecialRef = None
-    tag: int = 0
+    tag: object = 0   # int (literal) or str (symbolic name, resolved in geometry.py)
     points: list = field(default_factory=list)  # list[(int,int)]
 
 
@@ -76,7 +76,7 @@ class EdgeOverride:
     p1: tuple
     p2: tuple
     special: SpecialRef = None
-    tag: int = None
+    tag: object = None   # int (literal), str (symbolic name), or None (unset)
     flags: list = field(default_factory=list)
     textures: dict = field(default_factory=dict)  # sector_name -> TextureOverride
 
@@ -175,6 +175,18 @@ class _Parser:
             return SpecialRef("raw", n.value)
         return SpecialRef("name", tok.value)
 
+    def parse_tag_ref(self):
+        """`<int>` (a literal tag) or `<ident>` (a symbolic tag name,
+        auto-assigned a consistent integer during geometry resolution)."""
+        tok = self.peek()
+        if tok.kind == "INT":
+            self.advance()
+            return tok.value
+        if tok.kind == "IDENT":
+            self.advance()
+            return tok.value
+        raise WsParseError(f"expected a tag (integer or name), got {self._describe(tok)}", tok.line)
+
     def parse_flag_set(self):
         """`flags { IDENT ... }` body, called after 'flags' consumed."""
         self.expect_punct("{")
@@ -254,7 +266,7 @@ class _Parser:
             elif ftok.value == "special":
                 s.special = self.parse_special_ref()
             elif ftok.value == "tag":
-                s.tag = self.expect_int().value
+                s.tag = self.parse_tag_ref()
             elif ftok.value == "points":
                 self.expect_punct("{")
                 pts = []
@@ -291,7 +303,7 @@ class _Parser:
             if ftok.value == "special":
                 e.special = self.parse_special_ref()
             elif ftok.value == "tag":
-                e.tag = self.expect_int().value
+                e.tag = self.parse_tag_ref()
             elif ftok.value == "flags":
                 e.flags = self.parse_flag_set()
             else:

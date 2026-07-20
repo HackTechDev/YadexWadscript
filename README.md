@@ -83,13 +83,13 @@ sector_field  := "floor" INT | "ceiling" INT
                 | "floor_flat" STRING | "ceiling_flat" STRING
                 | "light" INT
                 | "special" (IDENT | "raw" INT)
-                | "tag" INT
+                | "tag" (INT | IDENT)
                 | "points" "{" point { point } "}" ;
 point         := "(" INT "," INT ")" ;
 
 edge_stmt     := "edge" point "-" point "{" { edge_field } "}" ;
 edge_field    := "special" (IDENT | "raw" INT)
-                | "tag" INT
+                | "tag" (INT | IDENT)
                 | "flags" "{" { IDENT } "}"
                 | "texture" IDENT "{" { texture_field } "}" ;   -- IDENT = name of a bordering sector
 texture_field := "upper" STRING | "lower" STRING | "middle" STRING
@@ -108,6 +108,26 @@ pass normalizes it automatically.
 Anywhere a symbolic name is expected (a linedef `special`, a `thing`
 kind), `raw <int>` bypasses the curated table entirely, e.g.
 `special raw 130` or `thing raw 3005 at (64,64) angle 0`.
+
+### Symbolic tags
+
+`tag` (on a `sector{}` or an `edge{}`) accepts either a literal integer
+or an identifier, e.g. `tag 5` or `tag lift_ouest`. A name is
+auto-assigned one integer, the first time it's seen, guaranteed not to
+collide with any integer literal used elsewhere as a tag in the same
+script; every later `tag <same name>` anywhere in the script — sector
+or edge — reuses that same integer. See
+[`examples/lift_symbolic_tag.wsl`](examples/lift_symbolic_tag.wsl).
+
+This exists to catch a specific copy-paste mistake: a tag typo'd on
+one side (the sector that should move, or the edge that triggers it)
+silently compiles to a WAD where the trigger does nothing, because the
+two integers just don't happen to match. A name makes that kind of
+mismatch easier to *see*, and wadscript adds one more layer: if a
+symbolic tag name is used only once in the entire script — meaning
+nothing else in the script shares it — that's almost certainly a typo
+on the other side, so a warning is printed (not a hard error, since a
+one-off named tag isn't strictly invalid, just unusual).
 
 ### Defaults
 
@@ -130,22 +150,44 @@ skills, all game modes) when omitted.
 
 ### Curated symbol tables
 
-**Linedef specials** (`wadscript/tables.py::LINEDEF_SPECIALS`, verified
-against `ygd/doom2.ygd`): `door_use` (1, DR, repeatable), `door_walk_once`
-(4, W1), `lift` (88, WR, repeatable), `exit_level` (11, S-),
-`exit_secret` (51, S-), `teleport` (39, W1).
+All numeric IDs below are cross-checked against `ygd/doom2.ygd`
+(Yadex's own Doom II/Final Doom game-definition file), not guessed.
+Entries tagged `[Boom]` need a Boom-compatible source port (nearly all
+modern ones are) rather than strict vanilla `doom2.exe` — the WAD
+binary layout is identical either way, only which port interprets the
+special number differs. The full, authoritative list with every name
+is `wadscript/tables.py` — read it directly rather than this summary
+when you need an exact name; use `raw <int>` for anything it doesn't
+cover.
 
-**Thing types** (`tables.py::THING_TYPES`): `player1_start`..`player4_start`
-(1-4), `deathmatch_start` (11), `zombieman` (3004), `shotgun_guy` (9),
-`imp` (3001), `demon` (3002), `shotgun` (2001), `chaingun` (2002),
-`rocket_launcher` (2003), `chainsaw` (2005), `clip` (2007), `shell`
-(2008), `soulsphere` (2013), `health_bonus` (2014), `armor_bonus`
-(2015), `medikit` (2012), `stimpack` (2011), `blue_keycard` (5),
-`yellow_keycard` (6), `red_keycard` (13).
+**Linedef specials** (`tables.py::LINEDEF_SPECIALS`, 44 entries):
+doors (18 — `door_use`, `door_walk_once`, open/close/stay-open in every
+trigger-method combination, plus `door_use_blue_key`/`_yellow_key`/
+`_red_key`), lifts (3 — `lift`, `lift_switch`, `lift_switch_once`),
+stairs (4 — `stairs_walk_once`, `stairs_switch_once`, and turbo
+variants), crushers (5 — `crusher_start_walk_once`/`_walk`/
+`_start_slow_walk`, `crusher_stop_walk_once`/`_walk`), light effects
+(9 — `light_blink_walk_once`, `light_to_max_*`, `light_to_dim_*`,
+`light_to_brightest_neighbor_walk_once`, etc.), exits (2 —
+`exit_level`, `exit_secret`), teleporters (3 — `teleport`,
+`teleport_switch`, `teleport_switch_once` `[Boom]`).
 
-**Sector types** are not curated in v1 — `special` on a `sector{}`
-block only accepts `raw <int>` (e.g. `special raw 9` for a secret
-sector); a bare name always errors.
+**Thing types** (`tables.py::THING_TYPES`, 100 entries): players/
+markers (6, including `teleport_exit`), monsters (21 — every Doom II
+monster except the source-port-specific mkII sprites, e.g.
+`spectre`, `cacodemon`, `baron_of_hell`, `revenant`, `arch_vile`,
+`cyberdemon`, `spider_mastermind`), weapons (7), ammo (9), health &
+armor (8), keys (6, including skull keys), misc. bonus items (8),
+decorations & obstacles (14 — pillars, torches' bases, barrels,
+`commander_keen`...), corpses/gore (9), light sources (12 — lamps,
+candles, torches).
+
+**Sector types** (`tables.py::SECTOR_SPECIALS`, 15 entries): `secret`;
+damaging floors `damage_5pct`/`_10pct`/`_20pct`/`_20pct_strobe`/
+`_20pct_end_level`; light effects `light_blink_random`,
+`light_strobe_fast`/`_slow` (and `_sync` variants), `light_glow`,
+`light_flicker_random`; timed ceiling movement `door_close_30s`,
+`door_open_300s`.
 
 **Thing flags** (`THING_FLAG_BITS`): `easy`, `medium`, `hard`, `ambush`,
 `not_sp`, `not_dm`, `not_coop`.
@@ -155,8 +197,8 @@ sector); a bare name always errors.
 automap), `upper_unpegged`, `lower_unpegged`. `impassible` and
 `two_sided` are reserved — computed automatically, never settable.
 
-Both tables only cover common cases; extend `tables.py` directly if you
-need more, or use `raw <int>`.
+These tables only cover common cases; extend `tables.py` directly if
+you need more (it's a plain Python dict), or use `raw <int>`.
 
 ## How geometry is derived
 
@@ -201,7 +243,7 @@ tables.py        curated symbol tables
 geometry.py      AST -> LevelData (winding, vertex dedup, edge derivation, texturing)
 wadwriter.py     LevelData -> WAD bytes
 errors.py        WsParseError / WsValidationError, with source line numbers
-examples/        single_room.wsl, three_rooms.wsl, lift.wsl
+examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py

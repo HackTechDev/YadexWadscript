@@ -5,27 +5,20 @@ juste un endroit où accumuler ce qui vaudrait la peine d'être fait un
 jour. Chaque entrée : ce que c'est, pourquoi ça vaut le coup. Rien ici
 n'est engagé tant que ce n'est pas explicitement demandé.
 
-## Vocabulaire / tables curatées (`tables.py`)
+## Fait
 
-- **Table `SECTOR_SPECIALS`.** Actuellement vide (voir README.md,
-  section "Curated symbol tables") — `sector { special ... }` n'accepte
-  que `raw <int>`. Un petit ensemble curaté (secret, dégâts au sol
-  5%/10%/20%, clignotements, plancher qui remonte...) rendrait les
-  scripts plus lisibles, sur le même modèle que `LINEDEF_SPECIALS`
-  (vérifié contre `ygd/doom2.ygd` avant d'ajouter quoi que ce soit).
-- **Étoffer `LINEDEF_SPECIALS`.** Seulement 6 entrées aujourd'hui
-  (portes, lift, sorties, téléport). Manquent : portes qui se
-  referment seules, escaliers, crushers, effets de lumière
-  (clignotement, strobe), variantes "switch" (S1/SR) des mêmes actions
-  déjà couvertes en walk-trigger.
-- **Étoffer `THING_TYPES`.** ~24 entrées, essentiellement les
-  monstres/objets les plus courants du premier niveau de Doom II.
-  Manquent la plupart des monstres (spectre, caco, baron, revenant...),
-  armures/munitions restantes, décorations, obstacles.
-- **Tags symboliques.** `tag 5` est un entier brut ; une table de noms
-  (`tag lift_ouest` → un entier auto-assigné et cohérent entre le
-  `sector{}` et l'`edge{}` qui le référence) éliminerait toute une
-  classe d'erreurs de copier-coller (tag qui ne correspond pas).
+- **Vocabulaire / tables curatées (`tables.py`).** Les quatre points
+  listés ci-dessous à l'origine sont implémentés : `SECTOR_SPECIALS`
+  (15 entrées, vérifiées contre `ygd/doom2.ygd`), `LINEDEF_SPECIALS`
+  étoffé (6 → 44 entrées : portes complètes, lifts, escaliers,
+  crushers, effets de lumière, variantes switch), `THING_TYPES` étoffé
+  (~24 → 100 entrées : tous les monstres non spécifiques à un port
+  source, armures/munitions restantes, décorations, obstacles), et les
+  tags symboliques (`tag lift_ouest`, auto-assignés et cohérents entre
+  `sector{}` et `edge{}`, avec un avertissement si un nom n'est
+  référencé qu'une seule fois dans le script — signe probable d'une
+  faute de frappe). Voir README.md ("Curated symbol tables",
+  "Symbolic tags") et `examples/lift_symbolic_tag.wsl`.
 
 ## Validation
 

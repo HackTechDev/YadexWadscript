@@ -86,6 +86,52 @@ def _resolve_flag_set(names, allowed_bits, reserved_bits, what, line):
     return bits
 
 
+class _TagResolver:
+    """Resolves `tag` fields (int literal or symbolic str name) to final
+    ints. A symbolic name gets one auto-assigned integer, consistent for
+    every sector{}/edge{} in the script that uses that same name -- and
+    never collides with an integer any part of the script used literally."""
+
+    def __init__(self, script):
+        self._used = set()
+        for s in script.sectors:
+            if isinstance(s.tag, int):
+                self._used.add(s.tag)
+        for e in script.edges:
+            if isinstance(e.tag, int):
+                self._used.add(e.tag)
+        self._names = {}
+        self._counts = {}
+        self._next = 1
+
+    def resolve(self, value):
+        if isinstance(value, int):
+            return value
+        self._counts[value] = self._counts.get(value, 0) + 1
+        if value in self._names:
+            return self._names[value]
+        while self._next in self._used:
+            self._next += 1
+        n = self._next
+        self._names[value] = n
+        self._used.add(n)
+        self._next += 1
+        return n
+
+    def warn_unpaired(self):
+        """A symbolic tag used only once total (in only one sector{} or
+        edge{}, never linking the two) is almost certainly a typo on one
+        side of what should have been a matching pair -- the exact
+        copy-paste mistake symbolic tags are meant to catch."""
+        for name, count in self._counts.items():
+            if count == 1:
+                print(
+                    f"warning: tag {name!r} is only referenced once in the whole "
+                    f"script -- a matching sector{{}} and edge{{}} both usually "
+                    f"reference the same tag; check for a typo",
+                    file=sys.stderr)
+
+
 def _shoelace_area2(points):
     """Twice the signed area (avoids fractions); >0 = CCW, <0 = CW."""
     total = 0
@@ -178,6 +224,8 @@ def resolve(script, map_name_override=None):
     if not script.sectors:
         raise WsValidationError("script defines no sectors")
 
+    tag_resolver = _TagResolver(script)
+
     d = script.defaults
     default_floor = d.floor if d and d.floor is not None else 0
     default_ceiling = d.ceiling if d and d.ceiling is not None else 128
@@ -232,7 +280,7 @@ def resolve(script, map_name_override=None):
         ceiling_flat = s.ceiling_flat if s.ceiling_flat is not None else default_ceiling_flat
         light = s.light if s.light is not None else default_light
         special = _resolve_special_ref(s.special, tables.SECTOR_SPECIALS, "sector special", s.line)
-        tag = s.tag or 0
+        tag = tag_resolver.resolve(s.tag)
         _check_name_len(floor_flat, f"sector {s.name!r} floor_flat", s.line)
         _check_name_len(ceiling_flat, f"sector {s.name!r} ceiling_flat", s.line)
         _check_range(floor, INT16_MIN, INT16_MAX, "floor height", s.line)
@@ -269,7 +317,7 @@ def resolve(script, map_name_override=None):
             e.special = _resolve_special_ref(ov.special, tables.LINEDEF_SPECIALS, "linedef special", ov.line)
             _check_range(e.special, INT16_MIN, INT16_MAX, "linedef special", ov.line)
         if ov.tag is not None:
-            e.tag = ov.tag
+            e.tag = tag_resolver.resolve(ov.tag)
             _check_range(e.tag, INT16_MIN, INT16_MAX, "linedef tag", ov.line)
         if ov.flags:
             e.flags |= _resolve_flag_set(
@@ -361,6 +409,7 @@ def resolve(script, map_name_override=None):
     if not has_player1_start:
         print(f"warning: script has no 'thing player1_start ...' -- the level has no player 1 start",
               file=sys.stderr)
+    tag_resolver.warn_unpaired()
 
     sectors = [sector_attrs_by_name[name] for name in sector_order]
 

@@ -1,0 +1,33 @@
+# Same lift as examples/lift.wsl, but using a symbolic tag name instead
+# of a raw integer -- `tag lift_ouest` on the sector and `tag lift_ouest`
+# on the trigger edge are auto-assigned the same integer, so a typo like
+# `tag lift_uest` on one side becomes a normal "unknown name" mistake
+# instead of a silent copy-paste tag mismatch.
+
+map "MAP01"
+
+defaults {
+  wall_texture "SUPPORT2"
+}
+
+sector hall {
+  points { (0,0) (128,0) (128,128) (0,128) }
+}
+
+sector lift {
+  tag lift_ouest
+  points { (128,0) (256,0) (256,128) (128,128) }
+}
+
+sector shaft {
+  floor -128
+  light 96
+  points { (256,0) (320,0) (320,128) (256,128) }
+}
+
+edge (128,0)-(128,128) {
+  special lift
+  tag lift_ouest
+}
+
+thing player1_start at (32,64) angle 0
