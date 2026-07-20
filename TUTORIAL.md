@@ -3,13 +3,12 @@
 Ce didacticiel construit un petit niveau Doom II pas à pas : une pièce,
 puis un couloir relié par une porte, un monstre, une sortie, et enfin
 un ascenseur tagué. Pour la référence complète de la grammaire et des
-tables symboliques, voir
-[README.md](README.md). Pour l'analyse du format WAD sous-jacent, voir
-[../ANALYSE_wad.md](../ANALYSE_wad.md).
+tables symboliques, voir [README.md](README.md).
 
-Prérequis : Python 3 (aucune dépendance externe), et idéalement Yadex
-déjà compilé dans ce dépôt (`../obj/0/yadex`) pour visualiser le
-résultat au fur et à mesure.
+Prérequis : Python 3 (aucune dépendance externe), et idéalement
+[Yadex](https://github.com/farhaven/yadex) compilé quelque part (voir
+ce dépôt pour les instructions) pour visualiser le résultat au fur et
+à mesure — wadscript lui-même n'en a pas besoin pour fonctionner.
 
 ## Étape 1 — Une pièce vide
 
@@ -80,7 +79,7 @@ Sans `--dump-geometry`, wadscript écrit vraiment le fichier :
 
 ```sh
 python3 wadscript.py tuto.wsl -o /tmp/tuto.wad
-../obj/0/yadex -g doom2 -pw /tmp/tuto.wad
+/path/to/yadex/obj/0/yadex -g doom2 -pw /tmp/tuto.wad
 ```
 
 Au prompt `yadex:`, tapez `e map01` pour ouvrir le niveau : vous devriez
