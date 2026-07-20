@@ -1,0 +1,110 @@
+# vault_complex.wsl -- a small progression gauntlet: a locked vault
+# (key + secret), a tagged lift descending into a hazard area, and an
+# exit. Everything after `foyer` is chained with `offset relative_to`
+# -- no hand-computed coordinates needed except for the edge{}
+# overrides below, which still target absolute points (an edge
+# override always does, regardless of how the bordering sectors got
+# their coordinates).
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+sector foyer {
+  floor 0
+  ceiling 128
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+# No door here on purpose -- foyer and key_hall connect as an ordinary
+# open two-sided wall, so the key is visible the moment you walk in.
+sector key_hall {
+  offset relative_to foyer east 0
+  floor 0
+  ceiling 128
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+thing blue_keycard at (380,128) angle east
+
+# North of key_hall, same width -- a full-width match, so the shared
+# wall resolves to an ordinary two-sided edge (see the door below)
+# instead of a partial "T-junction" wall segment.
+sector vault {
+  offset relative_to key_hall north 0
+  floor 0
+  ceiling 128
+  special secret
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+edge (256,256)-(512,256) {
+  special door_use_blue_key
+  texture key_hall { upper "BIGDOOR2" middle "-" lower "-" }
+  texture vault    { upper "BIGDOOR2" middle "-" lower "-" }
+}
+
+thing soulsphere at (320,320) angle east
+thing energy_cell_pack at (450,420) angle east
+
+sector lift_entry {
+  offset relative_to key_hall east 0
+  floor 0
+  ceiling 128
+  points { (0,0) (128,0) (128,256) (0,256) }
+}
+
+sector lift_platform {
+  offset relative_to lift_entry east 0
+  floor 0
+  ceiling 128
+  tag lift_west
+  points { (0,0) (128,0) (128,256) (0,256) }
+}
+
+edge (640,0)-(640,256) {
+  special lift
+  tag lift_west
+}
+
+sector lift_shaft {
+  offset relative_to lift_platform east 0
+  floor -128
+  ceiling 128
+  light 96
+  points { (0,0) (128,0) (128,256) (0,256) }
+}
+
+thing tall_blue_torch at (830,128) angle east
+
+sector hazard {
+  offset relative_to lift_shaft east 0
+  floor -128
+  ceiling 128
+  light 96
+  floor_flat "FLAT5_4"
+  special damage_10pct
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+thing radiation_suit at (950,128) angle east
+thing medikit at (1050,128) angle east
+
+sector exit_room {
+  offset relative_to hazard east 0
+  floor -128
+  ceiling 160
+  light 200
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+edge (1408,0)-(1408,256) {
+  special exit_level
+  texture exit_room { middle "SW1EXIT" }
+}
+
+thing armor at (1300,128) angle east
+
+thing player1_start at (64,128) angle east

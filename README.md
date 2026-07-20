@@ -12,6 +12,7 @@ convenient way to load and inspect the WAD files it produces.
 [Advanced features](#advanced-features) ·
 [How geometry is derived](#how-geometry-is-derived) ·
 [Known v1 limitations](#known-v1-limitations) ·
+[Larger examples](#larger-examples) ·
 [Layout](#layout)
 
 ## Quick start
@@ -453,6 +454,31 @@ or two different sectors' loops overlapping without sharing exact
 edges) is not detected — only each individual loop's self-intersection
 is checked.
 
+## Larger examples
+
+Every example above isolates one feature at a time; these two chain
+several together into a small, actually-connected level, closer to
+what a real script looks like in practice:
+
+- [`examples/combat_arena.wsl`](examples/combat_arena.wsl) — a door
+  (texture preset), a donut room (cover pillar) with a `repeat`-
+  generated firing line of monsters, a direct-trigger crusher, a
+  staircase, and an exit. Demonstrates mixing plain absolute
+  coordinates (needed for the donut room and its pillar, which must
+  match exactly) with `offset relative_to` chaining for everything
+  after it, where that exact-match constraint doesn't apply.
+- [`examples/vault_complex.wsl`](examples/vault_complex.wsl) — a
+  locked door (`door_use_blue_key`) opening onto a `secret` vault, a
+  symbolically-tagged lift descending into a `damage_10pct` hazard,
+  and an exit. Entirely `offset relative_to`-chained except for the
+  edge `special`/`tag` overrides, which always target absolute
+  coordinates regardless of how the bordering sectors got theirs.
+
+Both were verified the same way as every other example in this
+folder: `--dump-geometry` to check the resolved specials/tags/things
+by hand, loaded in Yadex, and node-built with BSP 5.2 — zero
+warnings, zero errors.
+
 ## Layout
 
 ```
@@ -466,7 +492,9 @@ texcheck.py      reads TEXTURE1/TEXTURE2/flat names from a real IWAD, for --chec
 errors.py        WsParseError / WsValidationError, with source line numbers
 examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl,
                  stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl,
-                 dungeon_grid.wsl, offset_relative.wsl
+                 dungeon_grid.wsl, offset_relative.wsl -- each isolates one
+                 feature; combat_arena.wsl and vault_complex.wsl chain
+                 several together into a small level (see below)
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py
