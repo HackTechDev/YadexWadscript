@@ -2,9 +2,14 @@
 
 A small declarative DSL for describing Doom II level geometry
 procedurally, compiled to a classic Doom-format single-level PWAD.
-Standalone Python 3 tool, stdlib only, unrelated to Yadex's own C++
-code or build — it just lives in this repo because Yadex is a
-convenient way to load and inspect the WAD files it produces.
+Standalone Python 3 tool, stdlib only.
+
+Originally developed inside [Yadex](https://github.com/farhaven/yadex),
+a Doom/Doom II/Heretic/Hexen/Strife/ZDoom level editor for Unix/X11,
+and extracted here as its own repository — wadscript itself is
+unrelated to Yadex's C++ code or build, but Yadex remains a convenient
+way to load and inspect the WAD files this tool produces (see
+[Quick start](#quick-start) below), which is why the two are linked.
 
 **Contents**: [Quick start](#quick-start) ·
 [The idea](#the-idea) ·
@@ -19,9 +24,14 @@ convenient way to load and inspect the WAD files it produces.
 
 ```sh
 python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad -m MAP01
-../obj/0/yadex -g doom2 -pw /tmp/out.wad
+/path/to/yadex/obj/0/yadex -g doom2 -pw /tmp/out.wad
 # at the "yadex:" prompt: e map01
 ```
+
+(`obj/0/yadex` is Yadex's own build output — see
+[github.com/farhaven/yadex](https://github.com/farhaven/yadex) for how
+to build it; wadscript doesn't need Yadex installed to run, only to
+visually inspect what it produces.)
 
 `--dump-geometry` prints the resolved vertex/linedef/sidedef/sector/
 thing tables instead of writing a WAD — useful for sanity-checking a
@@ -180,8 +190,10 @@ skills, all game modes) when omitted.
 
 ### Curated symbol tables
 
-All numeric IDs below are cross-checked against `ygd/doom2.ygd`
-(Yadex's own Doom II/Final Doom game-definition file), not guessed.
+All numeric IDs below are cross-checked against
+[`ygd/doom2.ygd`](https://github.com/farhaven/yadex/blob/master/ygd/doom2.ygd)
+(Yadex's own Doom II/Final Doom game-definition file, not part of this
+repo), not guessed.
 Entries tagged `[Boom]` need a Boom-compatible source port (nearly all
 modern ones are) rather than strict vanilla `doom2.exe` — the WAD
 binary layout is identical either way, only which port interprets the
