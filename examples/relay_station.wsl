@@ -1,0 +1,129 @@
+# relay_station.wsl -- another small chained level, this time built
+# around the three features none of the single-feature examples cover
+# yet: a tagged teleporter (teleport.wsl), sector/linedef light
+# effects (light_effects.wsl), and thing/edge `flags{}` (flags.wsl) --
+# combined with a yellow-key vault and a secret-exit trigger, in the
+# same "isolate one feature, then chain several into a real level"
+# spirit as combat_arena.wsl and vault_complex.wsl.
+#
+# Layout: foyer -> teleport pad -> (teleport, no shared geometry at
+# all with what follows) -> landing -> an ambush corridor with a
+# continuous flicker, entered through a one-shot brightness trigger
+# -> a yellow-key vault branch (secret) -> an exit hall ending in a
+# secret-exit trigger.
+# Everything from `landing` onward is `offset relative_to`-chained;
+# only `foyer`/`pad`/`landing` need absolute coordinates, since
+# `landing` isn't adjacent to anything declared before it.
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+texture_preset door_frame {
+  upper "BIGDOOR2"
+  middle "-"
+  lower "-"
+}
+
+sector foyer {
+  floor 0
+  ceiling 128
+  points { (0,0) (256,0) (256,128) (0,128) }
+}
+
+thing player1_start at (32,64) angle east
+
+# Tiny walkable sector so the teleport trigger edge is a real
+# two-sided linedef (see teleport.wsl) -- a one-sided outer wall can't
+# carry a walk-over special, since the player can never cross it.
+sector pad {
+  offset relative_to foyer east 0
+  floor 0
+  ceiling 128
+  points { (0,0) (64,0) (64,128) (0,128) }
+}
+
+edge (256,0)-(256,128) {
+  special teleport
+  tag relay_warp
+}
+
+sector landing {
+  offset (896,0)
+  floor 0
+  ceiling 128
+  tag relay_warp
+  points { (0,0) (192,0) (192,192) (0,192) }
+}
+
+thing teleport_exit at (992,96) angle west
+
+# Ambush imps: they won't wake from the teleporter's noise alone,
+# only from line of sight or taking damage -- see flags.wsl.
+sector corridor {
+  offset relative_to landing east 0
+  floor 0
+  ceiling 128
+  light 96
+  special light_flicker_random
+  points { (0,0) (320,0) (320,192) (0,192) }
+}
+
+# A `thing`'s coordinates are always absolute, even inside a sector
+# declared with `offset relative_to` -- corridor's bounding box starts
+# at x=1088 (right after landing, which itself starts at x=896), so
+# that's the base these three add to, not (0,0).
+repeat i 3 {
+  thing imp at (1088 + 64 + i * 96, 96) angle west flags { easy medium hard ambush }
+}
+
+# Walking into the corridor snaps the landing room up to the
+# corridor's own (brighter, pre-strobe) light level -- a one-shot
+# trigger, unlike the corridor's own continuous flicker. An edge{}
+# override always targets absolute coordinates regardless of how the
+# bordering sectors got theirs (offset relative_to, here) -- landing
+# is 192 wide starting at x=896, so its shared wall with corridor is
+# at x=1088.
+edge (1088,0)-(1088,192) {
+  special light_to_max_walk_once
+}
+
+sector key_hall {
+  offset relative_to corridor east 0
+  floor 0
+  ceiling 128
+  points { (0,0) (192,0) (192,192) (0,192) }
+}
+
+thing yellow_keycard at (1504,96) angle east
+
+sector vault {
+  offset relative_to key_hall north 0
+  floor 0
+  ceiling 128
+  special secret
+  points { (0,0) (192,0) (192,192) (0,192) }
+}
+
+edge (1408,192)-(1600,192) {
+  special door_use_yellow_key
+  texture key_hall { preset door_frame }
+  texture vault    { preset door_frame }
+}
+
+thing soulsphere at (1504,320) angle east
+
+sector exit_hall {
+  offset relative_to key_hall east 0
+  floor 0
+  ceiling 128
+  points { (0,0) (256,0) (256,192) (0,192) }
+}
+
+edge (1856,0)-(1856,192) {
+  special exit_secret
+  flags { secret }
+  texture exit_hall { middle "SW1EXIT" }
+}

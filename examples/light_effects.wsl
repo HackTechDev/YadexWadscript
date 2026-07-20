@@ -1,0 +1,85 @@
+# light_effects.wsl -- flickering/strobing sector specials versus a
+# linedef special that changes a sector's light level once.
+#
+# Two different mechanisms, easy to mix up:
+#   - a SECTOR_SPECIALS light effect (`light_strobe_fast`,
+#     `light_glow`, `light_flicker_random`...) is continuous and
+#     starts the moment the level loads -- set directly on the
+#     `sector{}` block, no trigger involved, same as `secret` or
+#     `damage_10pct` in secret_and_hazard.wsl.
+#   - a LINEDEF_SPECIALS light change (`light_to_max_walk_once`,
+#     `light_to_dim_walk_once`...) is a one-shot trigger: the room
+#     sits at its authored `light` level until the player walks
+#     across the edge, then jumps to the brightest/dimmest level
+#     among its neighbouring sectors.
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  light 224
+  points {
+    (0,0)
+    (256,0)
+    (256,128)
+    (0,128)
+  }
+}
+
+# Starts dim -- walking across the edge below jumps it up to the
+# brightest neighbouring sector's light level (hall's, 224).
+sector dim_room {
+  offset relative_to hall east 0
+  floor 0
+  ceiling 128
+  light 64
+  points {
+    (0,0)
+    (192,0)
+    (192,128)
+    (0,128)
+  }
+}
+
+edge (256,0)-(256,128) {
+  special light_to_max_walk_once
+}
+
+# Strobes continuously between its authored light level and the
+# darkest neighbouring sector's, no trigger needed.
+sector strobe_room {
+  offset relative_to dim_room east 0
+  floor 0
+  ceiling 128
+  light 224
+  special light_strobe_fast
+  points {
+    (0,0)
+    (192,0)
+    (192,128)
+    (0,128)
+  }
+}
+
+# Slow, irregular candle-like flicker, also continuous.
+sector flicker_room {
+  offset relative_to strobe_room east 0
+  floor 0
+  ceiling 128
+  light 160
+  special light_flicker_random
+  points {
+    (0,0)
+    (192,0)
+    (192,128)
+    (0,128)
+  }
+}
+
+thing player1_start at (32,64) angle 0
+thing candle at (700,64) angle 0

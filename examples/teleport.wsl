@@ -1,0 +1,70 @@
+# teleport.wsl -- a walk-triggered teleporter (special 39, W1 Teleport)
+# moving the player from a starting hall to a separate destination
+# room elsewhere in the map.
+#
+# How teleporters work in this DSL (and in vanilla Doom):
+#   - the trigger has to be a real (two-sided, walkable) linedef, not
+#     an impassible outer wall -- so `pad` is its own tiny sector
+#     right past `hall`, and the special/tag sit on the shared wall
+#     between them, the edge the player actually crosses on the way
+#     in,
+#   - it's a *tagged* trigger, same pattern as `lift.wsl`: the special
+#     fires on whichever sector shares its `tag` -- not `pad`, the
+#     sector the trigger edge itself borders,
+#   - the destination sector must contain a `teleport_exit` thing
+#     (doomednum 14) -- that's the exact spot and facing angle the
+#     player lands at, not just "somewhere in the tagged sector",
+#   - `landing` below is deliberately far from `hall`/`pad`, with no
+#     shared wall at all, to make clear the two rooms are only
+#     connected through the tag, not through geometry.
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (256,0)
+    (256,128)
+    (0,128)
+  }
+}
+
+sector pad {
+  offset relative_to hall east 0
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (64,0)
+    (64,128)
+    (0,128)
+  }
+}
+
+edge (256,0)-(256,128) {
+  special teleport
+  tag landing_pad
+}
+
+sector landing {
+  offset (768,768)
+  floor 0
+  ceiling 128
+  tag landing_pad
+  points {
+    (0,0)
+    (192,0)
+    (192,192)
+    (0,192)
+  }
+}
+
+thing teleport_exit at (864,864) angle west
+
+thing player1_start at (32,64) angle 0

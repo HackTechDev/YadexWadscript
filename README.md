@@ -212,9 +212,14 @@ variants; see [`examples/stairs.wsl`](examples/stairs.wsl)), crushers
 `crusher_stop_walk_once`/`_walk`; see
 [`examples/crusher.wsl`](examples/crusher.wsl)), light effects
 (9 — `light_blink_walk_once`, `light_to_max_*`, `light_to_dim_*`,
-`light_to_brightest_neighbor_walk_once`, etc.), exits (2 —
-`exit_level`, `exit_secret`), teleporters (3 — `teleport`,
-`teleport_switch`, `teleport_switch_once` `[Boom]`).
+`light_to_brightest_neighbor_walk_once`, etc.; see
+[`examples/light_effects.wsl`](examples/light_effects.wsl)), exits
+(2 — `exit_level`, `exit_secret`), teleporters (3 — `teleport`,
+`teleport_switch`, `teleport_switch_once` `[Boom]`; see
+[`examples/teleport.wsl`](examples/teleport.wsl) — like `lift`, a
+tagged trigger, and the trigger edge itself must be a real two-sided
+linedef, not a one-sided outer wall, for the player to walk across
+it).
 
 **Thing types** (`tables.py::THING_TYPES`, 100 entries): players/
 markers (6, including `teleport_exit`), monsters (21 — every Doom II
@@ -236,12 +241,16 @@ trigger edge — see
 [`examples/secret_and_hazard.wsl`](examples/secret_and_hazard.wsl).
 
 **Thing flags** (`THING_FLAG_BITS`): `easy`, `medium`, `hard`, `ambush`,
-`not_sp`, `not_dm`, `not_coop`.
+`not_sp`, `not_dm`, `not_coop`. Note that writing a thing's `flags{}`
+block at all replaces the `easy|medium|hard` default rather than
+adding to it — see [`examples/flags.wsl`](examples/flags.wsl).
 
 **Edge flags** (`LINEDEF_FLAG_BITS`): `block_monsters`, `secret`,
 `block_sound`, `hidden` (never on automap), `mapped` (always on
 automap), `upper_unpegged`, `lower_unpegged`. `impassible` and
 `two_sided` are reserved — computed automatically, never settable.
+See [`examples/flags.wsl`](examples/flags.wsl) for both a thing's and
+an edge's `flags{}` in the same script.
 
 These tables only cover common cases; extend `tables.py` directly if
 you need more (it's a plain Python dict), or use `raw <int>`.
@@ -543,8 +552,18 @@ what a real script looks like in practice:
   and an exit. Entirely `offset relative_to`-chained except for the
   edge `special`/`tag` overrides, which always target absolute
   coordinates regardless of how the bordering sectors got theirs.
+- [`examples/relay_station.wsl`](examples/relay_station.wsl) — a
+  tagged `teleport` linking two rooms with no shared geometry at all,
+  an `offset relative_to`-chained corridor of `ambush`-flagged monsters
+  under a continuous `light_flicker_random` (plus a one-shot
+  `light_to_max_walk_once` on the way in), a `door_use_yellow_key`
+  vault branch, and an `exit_secret` trigger carrying its own
+  `flags { secret }`. Combines every feature `teleport.wsl`,
+  `light_effects.wsl`, and `flags.wsl` isolate on their own into one
+  connected level, the same way `combat_arena.wsl`/`vault_complex.wsl`
+  do for the features before them.
 
-Both were verified the same way as every other example in this
+All three were verified the same way as every other example in this
 folder: `--dump-geometry` to check the resolved specials/tags/things
 by hand, loaded in Yadex, and node-built with BSP 5.2 — zero
 warnings, zero errors.
@@ -563,10 +582,12 @@ texcheck.py      reads TEXTURE1/TEXTURE2/flat names from a real IWAD, for --chec
 errors.py        WsParseError / WsValidationError, with source line numbers
 examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl,
                  stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl,
-                 dungeon_grid.wsl, offset_relative.wsl -- each isolates one
-                 feature; combat_arena.wsl and vault_complex.wsl chain
-                 several together into a small level (see below); common.wsl
-                 + shared_level_a.wsl/shared_level_b.wsl demonstrate `include`
+                 dungeon_grid.wsl, offset_relative.wsl, teleport.wsl,
+                 light_effects.wsl, flags.wsl -- each isolates one feature;
+                 combat_arena.wsl, vault_complex.wsl, and relay_station.wsl
+                 chain several together into a small level (see below);
+                 common.wsl + shared_level_a.wsl/shared_level_b.wsl
+                 demonstrate `include`
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py

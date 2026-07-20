@@ -1,0 +1,64 @@
+# flags.wsl -- the `flags{}` block on a `thing` and on an `edge`,
+# neither shown by any other example in this folder.
+#
+# Thing flags default to `easy|medium|hard` (appears on every skill,
+# every game mode) when the field is omitted entirely -- see
+# `defaults_stmt`/`thing_stmt` in README.md's language reference.
+# Writing `flags{}` explicitly replaces that default rather than
+# adding to it, so a flag left out has to be re-listed if still
+# wanted.
+#
+# Edge flags have no such default: an edge with no `flags{}` at all
+# just gets whatever `impassible`/`two_sided` bit the geometry pass
+# computes automatically (see README.md, "Edge flags") and nothing
+# else.
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (256,0)
+    (256,256)
+    (0,256)
+  }
+}
+
+# `ambush` (the "deaf" flag in the original Doom editors): this
+# imp won't wake up from noise alone, only from direct line of sight
+# or being hit -- an ambush setup, hence the flag's name.
+thing imp at (128,32) angle north flags { easy medium hard ambush }
+
+# `not_coop`/`not_dm`: this soulsphere only spawns in single-player --
+# a multiplayer-balance exclusion, common for the strongest pickups.
+thing soulsphere at (128,224) angle south flags { easy medium hard not_dm not_coop }
+
+sector nook {
+  offset relative_to hall east 0
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (128,0)
+    (128,256)
+    (0,256)
+  }
+}
+
+# `secret`: marks the linedef as a secret-area boundary on the
+# automap/stats, independent of any sector's `special secret` (see
+# secret_and_hazard.wsl for that other mechanism -- the two can be
+# combined but don't have to be).
+# `block_monsters`: monsters can't cross this line even though the
+# player can -- keeps the imp above penned into `hall`.
+edge (256,0)-(256,256) {
+  flags { secret block_monsters }
+}
+
+thing player1_start at (32,128) angle east
