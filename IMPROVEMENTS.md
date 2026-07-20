@@ -18,7 +18,11 @@ n'est engagé tant que ce n'est pas explicitement demandé.
   `sector{}` et `edge{}`, avec un avertissement si un nom n'est
   référencé qu'une seule fois dans le script — signe probable d'une
   faute de frappe). Voir README.md ("Curated symbol tables",
-  "Symbolic tags") et `examples/lift_symbolic_tag.wsl`.
+  "Symbolic tags") et `examples/lift_symbolic_tag.wsl`. Trois nouveaux
+  exemples illustrent les catégories fraîchement ajoutées :
+  `examples/stairs.wsl` (escalier), `examples/crusher.wsl` (crusher),
+  `examples/secret_and_hazard.wsl` (secteurs `secret` et
+  `damage_10pct`).
 
 ## Validation
 

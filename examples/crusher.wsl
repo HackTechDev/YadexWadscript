@@ -1,0 +1,47 @@
+# crusher.wsl -- a walk-triggered crushing ceiling (W1 Start fast
+# crushing, fast hurt, special 6) that starts moving down as soon as
+# the player walks in.
+#
+# Direct trigger, same pattern as a door or a lift: the special acts
+# on whichever sector the trigger edge borders -- here, `pit`, the
+# room with the crusher. No tag needed. The ceiling begins descending
+# toward the floor as soon as the special fires, and keeps cycling up
+# and down (with the usual crush-and-hurt behaviour) until stopped by
+# a `crusher_stop_walk_once`/`crusher_stop_walk` trigger elsewhere, or
+# forever if none exists.
+
+map "MAP01"
+
+defaults {
+  wall_texture "METAL"
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (128,0)
+    (128,128)
+    (0,128)
+  }
+}
+
+sector pit {
+  floor 0
+  ceiling 128
+  floor_flat "FLAT5_4"
+  ceiling_flat "CEIL5_1"
+  points {
+    (128,0)
+    (320,0)
+    (320,128)
+    (128,128)
+  }
+}
+
+edge (128,0)-(128,128) {
+  special crusher_start_walk_once
+}
+
+thing player1_start at (32,64) angle 0

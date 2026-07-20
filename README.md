@@ -165,8 +165,10 @@ doors (18 — `door_use`, `door_walk_once`, open/close/stay-open in every
 trigger-method combination, plus `door_use_blue_key`/`_yellow_key`/
 `_red_key`), lifts (3 — `lift`, `lift_switch`, `lift_switch_once`),
 stairs (4 — `stairs_walk_once`, `stairs_switch_once`, and turbo
-variants), crushers (5 — `crusher_start_walk_once`/`_walk`/
-`_start_slow_walk`, `crusher_stop_walk_once`/`_walk`), light effects
+variants; see [`examples/stairs.wsl`](examples/stairs.wsl)), crushers
+(5 — `crusher_start_walk_once`/`_walk`/`_start_slow_walk`,
+`crusher_stop_walk_once`/`_walk`; see
+[`examples/crusher.wsl`](examples/crusher.wsl)), light effects
 (9 — `light_blink_walk_once`, `light_to_max_*`, `light_to_dim_*`,
 `light_to_brightest_neighbor_walk_once`, etc.), exits (2 —
 `exit_level`, `exit_secret`), teleporters (3 — `teleport`,
@@ -187,7 +189,9 @@ damaging floors `damage_5pct`/`_10pct`/`_20pct`/`_20pct_strobe`/
 `_20pct_end_level`; light effects `light_blink_random`,
 `light_strobe_fast`/`_slow` (and `_sync` variants), `light_glow`,
 `light_flicker_random`; timed ceiling movement `door_close_30s`,
-`door_open_300s`.
+`door_open_300s`. Set directly on the `sector{}` block, not on a
+trigger edge — see
+[`examples/secret_and_hazard.wsl`](examples/secret_and_hazard.wsl).
 
 **Thing flags** (`THING_FLAG_BITS`): `easy`, `medium`, `hard`, `ambush`,
 `not_sp`, `not_dm`, `not_coop`.
@@ -243,7 +247,8 @@ tables.py        curated symbol tables
 geometry.py      AST -> LevelData (winding, vertex dedup, edge derivation, texturing)
 wadwriter.py     LevelData -> WAD bytes
 errors.py        WsParseError / WsValidationError, with source line numbers
-examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl
+examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl,
+                 stairs.wsl, crusher.wsl, secret_and_hazard.wsl
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py

@@ -1,0 +1,76 @@
+# stairs.wsl -- a walk-triggered staircase (W1 Raise Stairs, special 8)
+# rising out of the floor when the player crosses into the first step.
+#
+# How stairs work in this DSL (and in vanilla Doom):
+#   - unlike a lift, a stairs special is a *direct* trigger: it acts on
+#     whichever sector the trigger edge itself borders (the first step)
+#     -- no `tag` involved,
+#   - every step sector starts flush with the hall (same floor height),
+#     and must share the exact same `floor_flat` as its neighbours --
+#     that shared flat is how the game engine finds "the next step" to
+#     raise, one after another, when the staircase is triggered,
+#   - each step ends up 8 map units higher than the one before it (16
+#     for the "turbo" variants, `stairs_turbo_walk_once`/`_switch_once`).
+
+map "MAP01"
+
+defaults {
+  wall_texture "STONE2"
+}
+
+sector hall {
+  floor 0
+  ceiling 128
+  points {
+    (0,0)
+    (128,0)
+    (128,128)
+    (0,128)
+  }
+}
+
+# Three steps, all flush with the hall and sharing the same floor_flat
+# -- that shared flat is what the stairs algorithm follows.
+sector step1 {
+  floor 0
+  ceiling 128
+  floor_flat "STEP1"
+  points {
+    (128,0)
+    (192,0)
+    (192,128)
+    (128,128)
+  }
+}
+
+sector step2 {
+  floor 0
+  ceiling 128
+  floor_flat "STEP1"
+  points {
+    (192,0)
+    (256,0)
+    (256,128)
+    (192,128)
+  }
+}
+
+sector step3 {
+  floor 0
+  ceiling 128
+  floor_flat "STEP1"
+  points {
+    (256,0)
+    (320,0)
+    (320,128)
+    (256,128)
+  }
+}
+
+# Direct trigger: the special acts on step1, the sector this edge
+# borders -- no tag needed, same as a door.
+edge (128,0)-(128,128) {
+  special stairs_walk_once
+}
+
+thing player1_start at (32,64) angle 0
