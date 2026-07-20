@@ -25,8 +25,10 @@ python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad --dump-geometry
 **Important**: the WAD this tool produces has empty SEGS/SSECTORS/
 NODES/REJECT/BLOCKMAP lumps (same "needs rebuilding" convention Yadex
 itself uses for a level whose nodes are stale). Run an external
-nodebuilder (e.g. ZenNode, BSP — not part of this repo) on the output
-before it's playable in vanilla `doom2.exe` or most source ports. Yadex
+nodebuilder on the output before it's playable in vanilla `doom2.exe`
+or most source ports — e.g.
+[BSP 5.2](https://games.moria.org.uk/doom/bsp/), or ZenNode (not part
+of this repo, `bsp <output>.wad -o <output>.wad` in place). Yadex
 itself can open and edit a node-less level fine, which is why it's the
 verification tool of choice here.
 
