@@ -2,20 +2,23 @@
 
 Grammar is small and regular enough for a single hand-written scanner:
 identifiers, integers (signed), double-quoted strings, and the
-punctuation ( ) { } , -
+punctuation ( ) { } , - + *
 
 The one wrinkle: '-' is both the edge-endpoint separator in
-`(x,y)-(x,y)` and a negative-number sign. Resolved by maximal munch:
-at each position we first try to match `-?[0-9]+` as a single INT
-token; only if no digit follows a '-' is it emitted as its own PUNCT
-token.
+`(x,y)-(x,y)` (and the arithmetic minus in a `repeat` expression) and
+a negative-number sign. Resolved by maximal munch: at each position we
+first try to match `-?[0-9]+` as a single INT token; only if no digit
+follows a '-' is it emitted as its own PUNCT token. Practical
+consequence for `repeat` expressions: write `i - 1` (with a space),
+not `i-1` -- the latter lexes as the two tokens IDENT "i", INT -1,
+with no operator between them.
 """
 
 from dataclasses import dataclass
 
 from errors import WsParseError
 
-PUNCT_CHARS = "(){},"
+PUNCT_CHARS = "(){},+*"
 
 
 @dataclass

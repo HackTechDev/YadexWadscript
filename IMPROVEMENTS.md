@@ -40,28 +40,28 @@ n'est engagé tant que ce n'est pas explicitement demandé.
   (une boucle qui recouvre une autre sans partager exactement les
   mêmes arêtes) n'est pas détecté, seule l'auto-intersection de chaque
   boucle prise isolément l'est.
-
-## Ergonomie du langage
-
-- **Coordonnées relatives.** Aujourd'hui, chaque secteur est en
-  coordonnées absolues — composer plusieurs pièces demande de calculer
-  soi-même les décalages. Une syntaxe du genre `sector b relative_to a
-  east 0 { ... }` ou un simple `offset (dx,dy)` appliqué à tout un bloc
-  de points réduirait beaucoup l'arithmétique manuelle.
-- **Motifs répétitifs (escaliers, grilles de pièces).** Pas de moyen
-  de générer N sous-secteurs similaires (un escalier de 8 marches, une
-  grille de salles type donjon) sans les écrire à la main un par un.
-  Un mini-mécanisme de répétition (`repeat 8 { ... }` avec une variable
-  d'itération utilisable dans les coordonnées) couvrirait le cas le
-  plus fréquent sans transformer le DSL en langage de programmation
-  complet.
-- **Validation des noms de texture/flat contre un WAD réel.** Le
-  texturage n'est actuellement qu'un passe-plat de chaînes de
-  caractères (troncature à 8 caractères vérifiée, mais pas l'existence
-  de la texture). Une option `--check-textures <iwad>` qui vérifie les
-  noms contre PNAMES/TEXTURE1/les flats d'un iwad donné attraperait les
-  fautes de frappe (`"STARTAN"` au lieu de `"STARTAN3"`) avant le
-  chargement dans un éditeur.
+- **Ergonomie du langage.** Les trois points listés à l'origine sont
+  faits : coordonnées relatives via un nouveau champ `offset` sur
+  `sector{}` (`offset (dx,dy)` en translation directe, ou `offset
+  relative_to <secteur> <direction> <gap>` calculé depuis la bounding
+  box d'un secteur déjà déclaré — `gap 0` accole les deux secteurs et
+  fait naître un mur commun comme si les coordonnées avaient été
+  calculées à la main) ; motifs répétitifs via `repeat <var> <compte>
+  { ... }` (imbrication permise, variable(s) utilisable(s) dans les
+  expressions arithmétiques `+ - *` des coordonnées — points, `offset`,
+  `thing at`/`angle` — noms de secteur suffixés automatiquement par
+  le(s) indice(s) d'itération) ; validation des textures/flats via
+  `--check-textures <iwad>`, qui lit directement TEXTURE1/TEXTURE2 et
+  les lumps entre F_START/F_END d'un vrai IWAD/PWAD (`texcheck.py`,
+  nouveau module) et avertit (sans bloquer l'écriture) pour tout nom
+  absent. Testé avec un vrai `doom2.wad` (428 textures, 153 flats) :
+  les dix exemples du dossier passent sans le moindre avertissement.
+  Voir README.md ("Relative positioning (offset)", "Repeated geometry
+  (repeat)", "Checking textures against a real IWAD") et
+  `examples/offset_relative.wsl`, `examples/dungeon_grid.wsl`.
+  Restriction volontaire : seules les coordonnées sont
+  expression-capables (pas `floor`/`ceiling`/`tag`/textures), pour ne
+  pas transformer `repeat` en langage de templating général.
 
 ## Outillage
 

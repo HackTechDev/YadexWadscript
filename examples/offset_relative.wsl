@@ -1,0 +1,32 @@
+# offset_relative.wsl -- three rooms chained together with `offset
+# relative_to`, instead of hand-computing every room's absolute
+# coordinates. Each sector's points{} stays in simple "local"
+# coordinates starting near (0,0); `offset` shifts them into place.
+#
+#   - `hall`'s offset places it flush against `start`'s east side
+#     (gap 0 -- their shared wall becomes an ordinary two-sided
+#     linedef, same as if you'd computed the coordinates by hand).
+#   - `arena`'s offset places it east of `hall`, with a 32-unit gap
+#     -- far enough that no wall is shared, so both sides stay
+#     one-sided walls facing 32 units of untouched space.
+
+map "MAP01"
+
+sector start {
+  points { (0,0) (128,0) (128,128) (0,128) }
+}
+
+sector hall {
+  offset relative_to start east 0
+  floor_flat "FLOOR4_8"
+  points { (0,0) (128,0) (128,128) (0,128) }
+}
+
+sector arena {
+  offset relative_to hall east 32
+  ceiling 160
+  points { (0,0) (256,0) (256,256) (0,256) }
+}
+
+thing player1_start at (32,32) angle 0
+thing zombieman at (400,128) angle 180

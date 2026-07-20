@@ -186,6 +186,41 @@ def _check_simple_polygon(points, what, line):
                     line)
 
 
+def _bbox(points):
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _resolve_offset(offset, local_points, sector_bbox_by_name, line):
+    """Returns the (dx,dy) translation to apply to a sector's raw points
+    before validation/normalization. `local_points` is that sector's own
+    (un-translated) points, needed to compute where its own bounding box
+    edge lands for a `relative_to` offset."""
+    if offset is None:
+        return (0, 0)
+    if offset.kind == "literal":
+        return (offset.dx, offset.dy)
+    lminx, lminy, lmaxx, lmaxy = _bbox(local_points)
+    anchor = sector_bbox_by_name.get(offset.anchor)
+    if anchor is None:
+        raise WsValidationError(
+            f"offset relative_to {offset.anchor!r}: no such sector, or it isn't declared "
+            f"before this point (relative_to can only reference an already-declared sector)",
+            offset.line)
+    aminx, aminy, amaxx, amaxy = anchor
+    gap = offset.gap
+    if offset.direction == "east":
+        return (amaxx + gap - lminx, aminy - lminy)
+    if offset.direction == "west":
+        return (aminx - gap - lmaxx, aminy - lminy)
+    if offset.direction == "north":
+        return (aminx - lminx, amaxy + gap - lminy)
+    if offset.direction == "south":
+        return (aminx - lminx, aminy - gap - lmaxy)
+    raise AssertionError(offset.direction)
+
+
 def _validate_and_normalize_loop(points, what, line, invert):
     """Check a single closed point loop (a sector's outer boundary, or
     one of its holes) and normalize its winding. `invert` flips the
@@ -318,6 +353,7 @@ def resolve(script, map_name_override=None):
     seen_names = set()
     sector_order = []
     sector_points_by_name = {}
+    sector_bbox_by_name = {}
     line_by_name = {}
     sector_attrs_by_name = {}
 
@@ -326,15 +362,20 @@ def resolve(script, map_name_override=None):
             raise WsValidationError(f"duplicate sector name {s.name!r}", s.line)
         seen_names.add(s.name)
 
+        dx, dy = _resolve_offset(s.offset, s.points, sector_bbox_by_name, s.line)
+        shifted_points = [(x + dx, y + dy) for (x, y) in s.points]
+        shifted_holes = [[(x + dx, y + dy) for (x, y) in hole] for hole in s.holes]
+
         outer = _validate_and_normalize_loop(
-            s.points, f"sector {s.name!r}", s.line, invert=False)
+            shifted_points, f"sector {s.name!r}", s.line, invert=False)
         loops = [outer]
-        for i, hole in enumerate(s.holes):
+        for i, hole in enumerate(shifted_holes):
             loops.append(_validate_and_normalize_loop(
                 hole, f"sector {s.name!r} hole #{i + 1}", s.line, invert=True))
 
         sector_order.append(s.name)
         sector_points_by_name[s.name] = loops
+        sector_bbox_by_name[s.name] = _bbox(outer)
         line_by_name[s.name] = s.line
 
         floor = s.floor if s.floor is not None else default_floor

@@ -22,6 +22,15 @@ script before loading it anywhere:
 python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad --dump-geometry
 ```
 
+`--check-textures <iwad>` warns (non-fatally — it still writes the
+WAD) about `wall_texture`/`middle_texture`/flat names the script uses
+that don't actually exist in that IWAD/PWAD, e.g. a typo'd
+`"STARTAN"` instead of `"STARTAN3"`:
+
+```sh
+python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad --check-textures /path/to/doom2.wad
+```
+
 **Important**: the WAD this tool produces has empty SEGS/SSECTORS/
 NODES/REJECT/BLOCKMAP lumps (same "needs rebuilding" convention Yadex
 itself uses for a level whose nodes are stale). Run an external
@@ -70,7 +79,7 @@ the same way here:
 
 ```
 script      := { statement } ;
-statement   := map_stmt | defaults_stmt | sector_stmt | edge_stmt | thing_stmt ;
+statement   := map_stmt | defaults_stmt | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
 map_stmt      := "map" STRING ;                      -- required, exactly once
 
@@ -87,8 +96,10 @@ sector_field  := "floor" INT | "ceiling" INT
                 | "special" (IDENT | "raw" INT)
                 | "tag" (INT | IDENT)
                 | "points" "{" point { point } "}"
-                | "holes" "{" { "{" point { point } "}" } "}" ;
-point         := "(" INT "," INT ")" ;
+                | "holes" "{" { "{" point { point } "}" } "}"
+                | "offset" (point | "relative_to" IDENT direction INT) ;
+direction     := "east" | "west" | "north" | "south" ;
+point         := "(" expr "," expr ")" ;
 
 edge_stmt     := "edge" point "-" point "{" { edge_field } "}" ;
 edge_field    := "special" (IDENT | "raw" INT)
@@ -98,8 +109,14 @@ edge_field    := "special" (IDENT | "raw" INT)
 texture_field := "upper" STRING | "lower" STRING | "middle" STRING
                 | "x_offset" INT | "y_offset" INT ;
 
-thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" INT
+thing_stmt    := "thing" (IDENT | "raw" INT) "at" point "angle" expr
                   [ "flags" "{" { IDENT } "}" ] ;
+
+repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}" ;
+
+expr          := term { ("+" | "-") term } ;
+term          := unary { "*" unary } ;
+unary         := "-" unary | INT | IDENT | "(" expr ")" ;
 ```
 
 Comments start with `#` and run to end of line. Points may be listed in
@@ -127,6 +144,64 @@ sectors — no special-casing needed on the pillar's side. See
 A hole with no sector inside it is also valid: its edges just become
 one-sided (impassible) walls facing into unrendered void, the same as
 any other one-sided wall.
+
+### Relative positioning (offset)
+
+A sector's `points{}` (and `holes{}`) can be written in simple "local"
+coordinates — a shape starting near `(0,0)` — and shifted into place
+with an `offset` field, instead of hand-computing every absolute
+coordinate:
+
+- `offset (dx,dy)` — a plain translation.
+- `offset relative_to <sector> <direction> <gap>` — computed
+  automatically from an *already-declared* sector's bounding box:
+  `direction` is `east`/`west`/`north`/`south`, `gap` is the distance
+  between the two sectors' near edges (`0` places them flush, sharing
+  a wall the same way two sectors declared with matching absolute
+  coordinates would). See
+  [`examples/offset_relative.wsl`](examples/offset_relative.wsl).
+
+`relative_to` can only reference a sector declared earlier in the
+script (its bounding box has to already be known) — referencing a
+later or nonexistent sector is an error.
+
+### Repeated geometry (repeat)
+
+```
+repeat <var> <count> {
+  sector <name> { points { ... } }
+  edge ... { ... }
+  thing ... at (...) angle ...
+  repeat <var2> <count2> { ... }   -- nesting is allowed
+}
+```
+
+Runs its body `count` times, with `<var>` bound to `0, 1, ..., count-1`
+each time. Inside the body (including a nested `repeat`'s own body),
+`<var>` — and any enclosing `repeat`'s variable — can be used in
+arithmetic expressions anywhere a coordinate is expected: a sector's
+`points{}`/`holes{}` and `offset (dx,dy)`, an edge's endpoint points,
+or a thing's `at (x,y)` and `angle`. Expressions support `+ - *` and
+parentheses, e.g. `(i * 128, j * 128 + 16)`.
+
+Only coordinates are expression-capable — `floor`, `ceiling`, `light`,
+`tag`, and texture names stay plain literals, the same on every
+iteration; this keeps `repeat` a geometry-layout tool, not a general
+templating language.
+
+A `sector`'s name inside a `repeat` body automatically gets the
+enclosing iteration index (or indices, for nested repeats) appended —
+`sector cell { ... }` inside `repeat i 3 { repeat j 3 { ... } }`
+produces `cell_0_0` through `cell_2_2` — since sector names must be
+unique and the DSL has no string-interpolation syntax to build one by
+hand. See [`examples/dungeon_grid.wsl`](examples/dungeon_grid.wsl) for
+a 3x3 room grid generated (and auto-connected, via the usual
+edge-sharing derivation) from one nested `repeat`.
+
+**Lexer note**: because `-` is also the negative-number sign (maximal
+munch, see `lexer.py`), write a space before a literal you're
+subtracting inside an expression — `i - 1`, not `i-1`, which instead
+lexes as the two tokens `i` and `-1` with no operator between them.
 
 ### Symbolic tags
 
@@ -225,14 +300,25 @@ you need more (it's a plain Python dict), or use `raw <int>`.
 
 ## How geometry is derived
 
-1. **Validation + winding normalization.** Each closed point loop (a
-   sector's `points{}`, and each of its `holes{}` loops) is checked
-   for at least 3 points, no zero-length edges, non-zero area, and no
-   self-intersection (two non-adjacent edges of the same loop
-   crossing or overlapping) — then reordered clockwise internally (via
-   the shoelace signed-area formula), inverted for a hole loop, so a
-   one-sided wall always has its owning sector on the correct side.
-   You never have to think about point order when writing a script.
+Two passes happen before any of this, in `parser.py`, entirely outside
+`geometry.py`'s view: every `repeat` is expanded into concrete
+`sector`/`edge`/`thing` statements (loop variables substituted, sector
+names suffixed with the iteration index), and every coordinate
+expression is evaluated to a plain int. `geometry.py` never sees a
+`repeat` or an unevaluated expression, only ordinary int-valued AST
+nodes — as if the script had been written out longhand.
+
+1. **Offset, then validation + winding normalization.** A sector's
+   `offset` (a literal translation, or one computed from an
+   already-processed sector's bounding box for `relative_to`) is
+   applied to its `points{}`/`holes{}` first. Each resulting closed
+   point loop is then checked for at least 3 points, no zero-length
+   edges, non-zero area, and no self-intersection (two non-adjacent
+   edges of the same loop crossing or overlapping) — then reordered
+   clockwise internally (via the shoelace signed-area formula),
+   inverted for a hole loop, so a one-sided wall always has its owning
+   sector on the correct side. You never have to think about point
+   order when writing a script.
 2. **Vertex table.** All (deduplicated) points across every sector's
    loops become the WAD's VERTEXES lump, in first-seen order.
 3. **Edge grouping.** Every loop contributes one directed edge per
@@ -268,13 +354,15 @@ is checked.
 ```
 wadscript.py     CLI entrypoint
 lexer.py         source text -> tokens
-parser.py        tokens -> AST
+parser.py        tokens -> AST (also expands `repeat` and evaluates expressions)
 tables.py        curated symbol tables
-geometry.py      AST -> LevelData (winding, vertex dedup, edge derivation, texturing)
+geometry.py      AST -> LevelData (offset, winding, vertex dedup, edge derivation, texturing)
 wadwriter.py     LevelData -> WAD bytes
+texcheck.py      reads TEXTURE1/TEXTURE2/flat names from a real IWAD, for --check-textures
 errors.py        WsParseError / WsValidationError, with source line numbers
 examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.wsl,
-                 stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl
+                 stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl,
+                 dungeon_grid.wsl, offset_relative.wsl
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed
                   AST->LevelData cases for geometry.py
