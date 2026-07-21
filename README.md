@@ -95,19 +95,24 @@ about the language or the compiler is reimplemented for the GUI:
 - **Lancer dans le moteur** (`Ctrl+R`) launches the configured Doom
   source port (see below) as `<engine> -file <wad>` on the most
   recently compiled WAD.
+- **Ouvrir dans l'éditeur de niveau** (`Ctrl+E`) launches the configured
+  level editor (e.g. Yadex) as `<editor> <wad>` on the most recently
+  compiled WAD — Yadex itself accepts a bare PWAD path this way (see
+  [Quick start](#quick-start)), no `-g`/`-pw` needed.
 
 Either of the first two actions, on a `WsError`, prints
 `file:line: error: message` (the same format the CLI uses) to the
 output pane and jumps the editor to the offending line — the error's
 line number is never guessed twice in two different places.
 
-**Paramètres > Configurer...** sets two paths, persisted across runs
+**Paramètres > Configurer...** sets three paths, persisted across runs
 (via `QSettings`, e.g. `~/.config/wadscript/editor.conf` on Linux):
-the nodebuilder binary (e.g. BSP, ZenNode) and a Doom source port
-binary. Both are optional — leaving either blank just means "Compiler"
-skips the automatic nodebuilder pass (same as before this existed) and
-"Lancer dans le moteur" refuses with a clear message instead of
-launching nothing.
+the nodebuilder binary (e.g. BSP, ZenNode), a Doom source port binary,
+and a level editor binary (e.g. Yadex). All three are optional —
+leaving one blank just means "Compiler" skips the automatic nodebuilder
+pass (same as before this existed) and the corresponding "Lancer..."/
+"Ouvrir..." action refuses with a clear message instead of launching
+nothing.
 
 **Fichier > Fichiers récents** lists the last 10 scripts opened or
 saved (most recent first, numbered `1` through `9` as mnemonics once

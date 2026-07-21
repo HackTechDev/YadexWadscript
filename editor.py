@@ -22,9 +22,10 @@ format the CLI uses) to the output pane and jumps the editor to the
 offending line.
 
 "Paramètres" > "Configurer..." sets the path to an external nodebuilder
-(e.g. BSP, ZenNode) and to a Doom source port, persisted across runs
-via QSettings. Once a source port is configured, "Lancer dans le
-moteur" launches it on the most recently compiled (and node-built) WAD.
+(e.g. BSP, ZenNode), to a Doom source port, and to a level editor (e.g.
+Yadex), persisted across runs via QSettings. Once configured, "Lancer
+dans le moteur" / "Ouvrir dans l'éditeur de niveau" launch them on the
+most recently compiled (and node-built) WAD.
 """
 
 import io
@@ -111,22 +112,25 @@ class WadscriptHighlighter(QSyntaxHighlighter):
 
 
 class SettingsDialog(QDialog):
-    """Two file paths (nodebuilder, source port), each with a "Parcourir..."
-    button -- deliberately just paths, no extra flags/arguments fields, to
-    stay a small settings dialog rather than growing into a launcher config
-    editor. Values are only written back to QSettings on Ok, not live as
-    the user types, so Cancel truly discards edits."""
+    """Three file paths (nodebuilder, source port, level editor), each with
+    a "Parcourir..." button -- deliberately just paths, no extra flags/
+    arguments fields, to stay a small settings dialog rather than growing
+    into a launcher config editor. Values are only written back to
+    QSettings on Ok, not live as the user types, so Cancel truly discards
+    edits."""
 
-    def __init__(self, nodebuilder_path, engine_path, parent=None):
+    def __init__(self, nodebuilder_path, engine_path, level_editor_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Paramètres")
 
         self.nodebuilder_edit = QLineEdit(nodebuilder_path)
         self.engine_edit = QLineEdit(engine_path)
+        self.level_editor_edit = QLineEdit(level_editor_path)
 
         form = QFormLayout()
         form.addRow("Nodebuilder (ex. bsp) :", self._row(self.nodebuilder_edit, "un nodebuilder"))
         form.addRow("Moteur Doom (port source) :", self._row(self.engine_edit, "un moteur Doom"))
+        form.addRow("Éditeur de niveau (ex. Yadex) :", self._row(self.level_editor_edit, "un éditeur de niveau"))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -265,6 +269,7 @@ class MainWindow(QMainWindow):
         self.settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "wadscript", "editor")
         self.nodebuilder_path = self.settings.value("nodebuilder_path", "", str)
         self.engine_path = self.settings.value("engine_path", "", str)
+        self.level_editor_path = self.settings.value("level_editor_path", "", str)
         self.recent_files = self._load_recent_files()
 
         self.editor = CodeEditor()
@@ -334,6 +339,9 @@ class MainWindow(QMainWindow):
         self.play_action = run_menu.addAction("&Lancer dans le moteur")
         self.play_action.setShortcut(QKeySequence("Ctrl+R"))
         self.play_action.triggered.connect(self.play_in_engine)
+        self.open_in_editor_action = run_menu.addAction("&Ouvrir dans l'éditeur de niveau")
+        self.open_in_editor_action.setShortcut(QKeySequence("Ctrl+E"))
+        self.open_in_editor_action.triggered.connect(self.open_in_level_editor)
 
         settings_menu = self.menuBar().addMenu("&Paramètres")
         self.configure_action = settings_menu.addAction("&Configurer...")
@@ -347,6 +355,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(self.check_action)
         self.toolbar.addAction(self.build_action)
         self.toolbar.addAction(self.play_action)
+        self.toolbar.addAction(self.open_in_editor_action)
         self.addToolBar(self.toolbar)
 
     # -- window title / status bar --
@@ -618,14 +627,36 @@ class MainWindow(QMainWindow):
             return
         self.output.appendPlainText(f"lancé : {self.engine_path} -file {self.last_wad_path}")
 
+    def open_in_level_editor(self):
+        if not self.level_editor_path:
+            QMessageBox.warning(
+                self, "Éditeur de niveau non configuré",
+                "Configurez le chemin d'un éditeur de niveau (ex. Yadex) dans "
+                "Paramètres > Configurer... avant de pouvoir l'ouvrir.")
+            return
+        if not self.last_wad_path or not os.path.exists(self.last_wad_path):
+            QMessageBox.warning(
+                self, "Aucun WAD compilé",
+                "Compilez le script (Exécuter > Compiler vers .wad...) avant de l'ouvrir dans "
+                "l'éditeur de niveau.")
+            return
+        try:
+            subprocess.Popen([self.level_editor_path, self.last_wad_path])
+        except OSError as e:
+            self.output.appendPlainText(f"erreur : impossible de lancer l'éditeur de niveau : {e}")
+            return
+        self.output.appendPlainText(f"lancé : {self.level_editor_path} {self.last_wad_path}")
+
     def open_settings(self):
-        dialog = SettingsDialog(self.nodebuilder_path, self.engine_path, self)
+        dialog = SettingsDialog(self.nodebuilder_path, self.engine_path, self.level_editor_path, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         self.nodebuilder_path = dialog.nodebuilder_edit.text().strip()
         self.engine_path = dialog.engine_edit.text().strip()
+        self.level_editor_path = dialog.level_editor_edit.text().strip()
         self.settings.setValue("nodebuilder_path", self.nodebuilder_path)
         self.settings.setValue("engine_path", self.engine_path)
+        self.settings.setValue("level_editor_path", self.level_editor_path)
 
 
 def main():
