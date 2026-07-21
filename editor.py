@@ -22,10 +22,12 @@ format the CLI uses) to the output pane and jumps the editor to the
 offending line.
 
 "Paramètres" > "Configurer..." sets the path to an external nodebuilder
-(e.g. BSP, ZenNode), to a Doom source port, and to a level editor (e.g.
-Yadex), persisted across runs via QSettings. Once configured, "Lancer
-dans le moteur" / "Ouvrir dans l'éditeur de niveau" launch them on the
-most recently compiled (and node-built) WAD.
+(e.g. BSP, ZenNode), to a Doom source port, to a level editor (e.g.
+Yadex), and to an IWAD, persisted across runs via QSettings. Once
+configured, "Lancer dans le moteur" / "Ouvrir dans l'éditeur de niveau"
+launch them on the most recently compiled (and node-built) WAD, passing
+the IWAD along (`-iwad` for the engine, Yadex's own `-g doom2 -i2` for
+the level editor) if one is set.
 """
 
 import io
@@ -112,25 +114,27 @@ class WadscriptHighlighter(QSyntaxHighlighter):
 
 
 class SettingsDialog(QDialog):
-    """Three file paths (nodebuilder, source port, level editor), each with
-    a "Parcourir..." button -- deliberately just paths, no extra flags/
-    arguments fields, to stay a small settings dialog rather than growing
-    into a launcher config editor. Values are only written back to
+    """Four file paths (nodebuilder, source port, level editor, IWAD), each
+    with a "Parcourir..." button -- deliberately just paths, no extra
+    flags/arguments fields, to stay a small settings dialog rather than
+    growing into a launcher config editor. Values are only written back to
     QSettings on Ok, not live as the user types, so Cancel truly discards
     edits."""
 
-    def __init__(self, nodebuilder_path, engine_path, level_editor_path, parent=None):
+    def __init__(self, nodebuilder_path, engine_path, level_editor_path, iwad_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Paramètres")
 
         self.nodebuilder_edit = QLineEdit(nodebuilder_path)
         self.engine_edit = QLineEdit(engine_path)
         self.level_editor_edit = QLineEdit(level_editor_path)
+        self.iwad_edit = QLineEdit(iwad_path)
 
         form = QFormLayout()
         form.addRow("Nodebuilder (ex. bsp) :", self._row(self.nodebuilder_edit, "un nodebuilder"))
         form.addRow("Moteur Doom (port source) :", self._row(self.engine_edit, "un moteur Doom"))
         form.addRow("Éditeur de niveau (ex. Yadex) :", self._row(self.level_editor_edit, "un éditeur de niveau"))
+        form.addRow("IWAD (ex. doom2.wad) :", self._row(self.iwad_edit, "un IWAD"))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -270,6 +274,7 @@ class MainWindow(QMainWindow):
         self.nodebuilder_path = self.settings.value("nodebuilder_path", "", str)
         self.engine_path = self.settings.value("engine_path", "", str)
         self.level_editor_path = self.settings.value("level_editor_path", "", str)
+        self.iwad_path = self.settings.value("iwad_path", "", str)
         self.recent_files = self._load_recent_files()
 
         self.editor = CodeEditor()
@@ -620,12 +625,16 @@ class MainWindow(QMainWindow):
                 "Compilez le script (Exécuter > Compiler vers .wad...) avant de le lancer dans "
                 "le moteur.")
             return
+        args = [self.engine_path]
+        if self.iwad_path:
+            args += ["-iwad", self.iwad_path]
+        args += ["-file", self.last_wad_path]
         try:
-            subprocess.Popen([self.engine_path, "-file", self.last_wad_path])
+            subprocess.Popen(args)
         except OSError as e:
             self.output.appendPlainText(f"erreur : impossible de lancer le moteur : {e}")
             return
-        self.output.appendPlainText(f"lancé : {self.engine_path} -file {self.last_wad_path}")
+        self.output.appendPlainText(f"lancé : {' '.join(args)}")
 
     def open_in_level_editor(self):
         if not self.level_editor_path:
@@ -640,23 +649,32 @@ class MainWindow(QMainWindow):
                 "Compilez le script (Exécuter > Compiler vers .wad...) avant de l'ouvrir dans "
                 "l'éditeur de niveau.")
             return
+        args = [self.level_editor_path]
+        # -g/-i2 are Yadex's own flags for "game" and "Doom II/Final Doom
+        # iwad" -- this project only ever targets Doom II (see README.md),
+        # and this action is documented as launching Yadex specifically.
+        if self.iwad_path:
+            args += ["-g", "doom2", "-i2", self.iwad_path]
+        args.append(self.last_wad_path)
         try:
-            subprocess.Popen([self.level_editor_path, self.last_wad_path])
+            subprocess.Popen(args)
         except OSError as e:
             self.output.appendPlainText(f"erreur : impossible de lancer l'éditeur de niveau : {e}")
             return
-        self.output.appendPlainText(f"lancé : {self.level_editor_path} {self.last_wad_path}")
+        self.output.appendPlainText(f"lancé : {' '.join(args)}")
 
     def open_settings(self):
-        dialog = SettingsDialog(self.nodebuilder_path, self.engine_path, self.level_editor_path, self)
+        dialog = SettingsDialog(self.nodebuilder_path, self.engine_path, self.level_editor_path, self.iwad_path, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         self.nodebuilder_path = dialog.nodebuilder_edit.text().strip()
         self.engine_path = dialog.engine_edit.text().strip()
         self.level_editor_path = dialog.level_editor_edit.text().strip()
+        self.iwad_path = dialog.iwad_edit.text().strip()
         self.settings.setValue("nodebuilder_path", self.nodebuilder_path)
         self.settings.setValue("engine_path", self.engine_path)
         self.settings.setValue("level_editor_path", self.level_editor_path)
+        self.settings.setValue("iwad_path", self.iwad_path)
 
 
 def main():

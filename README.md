@@ -94,25 +94,30 @@ about the language or the compiler is reimplemented for the GUI:
   [Quick start](#quick-start), just not a separate manual step anymore.
 - **Lancer dans le moteur** (`Ctrl+R`) launches the configured Doom
   source port (see below) as `<engine> -file <wad>` on the most
-  recently compiled WAD.
+  recently compiled WAD — plus `-iwad <iwad>` first, if an IWAD is
+  configured.
 - **Ouvrir dans l'éditeur de niveau** (`Ctrl+E`) launches the configured
   level editor (e.g. Yadex) as `<editor> <wad>` on the most recently
   compiled WAD — Yadex itself accepts a bare PWAD path this way (see
-  [Quick start](#quick-start)), no `-g`/`-pw` needed.
+  [Quick start](#quick-start)), no `-g`/`-pw` needed unless an IWAD is
+  configured, in which case it's `<editor> -g doom2 -i2 <iwad> <wad>`
+  (Yadex's own flags for "game" and "Doom II/Final Doom iwad").
 
 Either of the first two actions, on a `WsError`, prints
 `file:line: error: message` (the same format the CLI uses) to the
 output pane and jumps the editor to the offending line — the error's
 line number is never guessed twice in two different places.
 
-**Paramètres > Configurer...** sets three paths, persisted across runs
-(via `QSettings`, e.g. `~/.config/wadscript/editor.conf` on Linux):
-the nodebuilder binary (e.g. BSP, ZenNode), a Doom source port binary,
-and a level editor binary (e.g. Yadex). All three are optional —
-leaving one blank just means "Compiler" skips the automatic nodebuilder
-pass (same as before this existed) and the corresponding "Lancer..."/
-"Ouvrir..." action refuses with a clear message instead of launching
-nothing.
+**Paramètres > Configurer...** sets four paths, persisted across runs
+(via `QSettings`, e.g. `~/.config/wadscript/editor.conf` on Linux): the
+nodebuilder binary (e.g. BSP, ZenNode), a Doom source port binary, a
+level editor binary (e.g. Yadex), and an IWAD (e.g. `doom2.wad`). All
+four are optional — leaving one blank just means "Compiler" skips the
+automatic nodebuilder pass (same as before this existed), "Lancer..."/
+"Ouvrir..." refuse with a clear message instead of launching nothing if
+their own binary isn't set, and either launches without an explicit
+IWAD if that one field alone is left blank (relying on whatever IWAD
+the engine/editor defaults to on its own).
 
 **Fichier > Fichiers récents** lists the last 10 scripts opened or
 saved (most recent first, numbered `1` through `9` as mnemonics once
