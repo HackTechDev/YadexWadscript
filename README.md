@@ -88,12 +88,26 @@ about the language or the compiler is reimplemented for the GUI:
   bottom, the same as `--dump-geometry` — without writing anything.
 - **Compiler vers .wad...** (`Ctrl+B`) runs the script and writes a WAD
   file (prompts for where). Needs the script saved to a real path
-  first, the same way `include`'s relative paths need one.
+  first, the same way `include`'s relative paths need one. If a
+  nodebuilder is configured (see below), it's then run on the WAD in
+  place automatically — the exact `bsp <wad> -o <wad>` convention from
+  [Quick start](#quick-start), just not a separate manual step anymore.
+- **Lancer dans le moteur** (`Ctrl+R`) launches the configured Doom
+  source port (see below) as `<engine> -file <wad>` on the most
+  recently compiled WAD.
 
-Either action, on a `WsError`, prints `file:line: error: message` (the
-same format the CLI uses) to the output pane and jumps the editor to
-the offending line — the error's line number is never guessed twice in
-two different places.
+Either of the first two actions, on a `WsError`, prints
+`file:line: error: message` (the same format the CLI uses) to the
+output pane and jumps the editor to the offending line — the error's
+line number is never guessed twice in two different places.
+
+**Paramètres > Configurer...** sets two paths, persisted across runs
+(via `QSettings`, e.g. `~/.config/wadscript/editor.conf` on Linux):
+the nodebuilder binary (e.g. BSP, ZenNode) and a Doom source port
+binary. Both are optional — leaving either blank just means "Compiler"
+skips the automatic nodebuilder pass (same as before this existed) and
+"Lancer dans le moteur" refuses with a clear message instead of
+launching nothing.
 
 ## The idea
 

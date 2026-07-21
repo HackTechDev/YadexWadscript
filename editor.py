@@ -12,26 +12,37 @@ same tokenize/parse/resolve pipeline as wadscript.py:
   - "Vérifier" runs it and prints the resolved vertex/linedef/sidedef/
     sector/thing tables (same as --dump-geometry), without writing
     anything.
-  - "Compiler vers .wad..." runs it and writes a WAD file.
+  - "Compiler vers .wad..." runs it and writes a WAD file, then runs
+    the configured nodebuilder on it in place (if one is configured --
+    see "Paramètres" below), since a freshly-written WAD always needs
+    one before it's playable (see README.md).
 
 Either one, on a WsError, prints "file:line: error: message" (the same
 format the CLI uses) to the output pane and jumps the editor to the
 offending line.
+
+"Paramètres" > "Configurer..." sets the path to an external nodebuilder
+(e.g. BSP, ZenNode) and to a Doom source port, persisted across runs
+via QSettings. Once a source port is configured, "Lancer dans le
+moteur" launches it on the most recently compiled (and node-built) WAD.
 """
 
 import io
 import os
+import subprocess
 import sys
 import traceback
 
-from PySide6.QtCore import Qt, QRect, QSize, QRegularExpression
+from PySide6.QtCore import Qt, QRect, QSettings, QSize, QRegularExpression
 from PySide6.QtGui import (
     QColor, QFont, QKeySequence, QPainter, QSyntaxHighlighter,
     QTextCharFormat, QTextCursor, QTextFormat,
 )
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QMainWindow, QMessageBox, QPlainTextEdit,
-    QSplitter, QStatusBar, QTextEdit, QToolBar, QWidget,
+    QApplication, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QHBoxLayout, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
+    QPushButton, QSplitter, QStatusBar, QTextEdit, QToolBar, QVBoxLayout,
+    QWidget,
 )
 
 from errors import WsError
@@ -97,6 +108,48 @@ class WadscriptHighlighter(QSyntaxHighlighter):
         while it.hasNext():
             m = it.next()
             self.setFormat(m.capturedStart(), m.capturedLength(), self._comment_format)
+
+
+class SettingsDialog(QDialog):
+    """Two file paths (nodebuilder, source port), each with a "Parcourir..."
+    button -- deliberately just paths, no extra flags/arguments fields, to
+    stay a small settings dialog rather than growing into a launcher config
+    editor. Values are only written back to QSettings on Ok, not live as
+    the user types, so Cancel truly discards edits."""
+
+    def __init__(self, nodebuilder_path, engine_path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Paramètres")
+
+        self.nodebuilder_edit = QLineEdit(nodebuilder_path)
+        self.engine_edit = QLineEdit(engine_path)
+
+        form = QFormLayout()
+        form.addRow("Nodebuilder (ex. bsp) :", self._row(self.nodebuilder_edit, "un nodebuilder"))
+        form.addRow("Moteur Doom (port source) :", self._row(self.engine_edit, "un moteur Doom"))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def _row(self, line_edit, dialog_title_suffix):
+        browse = QPushButton("Parcourir...")
+        browse.clicked.connect(lambda: self._browse(line_edit, dialog_title_suffix))
+        row = QHBoxLayout()
+        row.addWidget(line_edit)
+        row.addWidget(browse)
+        container = QWidget()
+        container.setLayout(row)
+        return container
+
+    def _browse(self, line_edit, dialog_title_suffix):
+        path, _ = QFileDialog.getOpenFileName(self, f"Choisir {dialog_title_suffix}", line_edit.text())
+        if path:
+            line_edit.setText(path)
 
 
 class _LineNumberArea(QWidget):
@@ -209,6 +262,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.current_path = None
         self.last_wad_path = None
+        self.settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "wadscript", "editor")
+        self.nodebuilder_path = self.settings.value("nodebuilder_path", "", str)
+        self.engine_path = self.settings.value("engine_path", "", str)
 
         self.editor = CodeEditor()
         self.editor.textChanged.connect(self._update_title)
@@ -268,6 +324,13 @@ class MainWindow(QMainWindow):
         self.build_action = run_menu.addAction("&Compiler vers .wad...")
         self.build_action.setShortcut(QKeySequence("Ctrl+B"))
         self.build_action.triggered.connect(self.build_wad)
+        self.play_action = run_menu.addAction("&Lancer dans le moteur")
+        self.play_action.setShortcut(QKeySequence("Ctrl+R"))
+        self.play_action.triggered.connect(self.play_in_engine)
+
+        settings_menu = self.menuBar().addMenu("&Paramètres")
+        self.configure_action = settings_menu.addAction("&Configurer...")
+        self.configure_action.triggered.connect(self.open_settings)
 
         self.toolbar = QToolBar("Principale")
         self.toolbar.addAction(self.new_action)
@@ -276,6 +339,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addSeparator()
         self.toolbar.addAction(self.check_action)
         self.toolbar.addAction(self.build_action)
+        self.toolbar.addAction(self.play_action)
         self.addToolBar(self.toolbar)
 
     # -- window title / status bar --
@@ -428,9 +492,65 @@ class MainWindow(QMainWindow):
         self.output.appendPlainText(
             f"écrit {path} : {len(level.vertices)} vertices, {len(level.linedefs)} linedefs, "
             f"{len(level.sidedefs)} sidedefs, {len(level.sectors)} sectors, {len(level.things)} things")
-        self.output.appendPlainText(
-            "rappel : passez ce WAD dans un nodebuilder externe (bsp, ZenNode) avant de le "
-            "charger dans un port source ou dans Yadex pour jouer -- voir README.md.")
+        if self.nodebuilder_path:
+            self._run_nodebuilder(path)
+        else:
+            self.output.appendPlainText(
+                "rappel : ce WAD a besoin d'un nodebuilder externe (bsp, ZenNode) avant de "
+                "pouvoir être chargé dans un port source ou dans Yadex pour jouer -- configurez-en "
+                "un dans Paramètres > Configurer... pour que ce soit fait automatiquement.")
+
+    def _run_nodebuilder(self, wad_path):
+        """Runs the configured nodebuilder on wad_path in place, the same
+        'bsp <wad> -o <wad>' convention documented in README.md."""
+        self.output.appendPlainText(f"lancement du nodebuilder : {self.nodebuilder_path} {wad_path} -o {wad_path}")
+        try:
+            result = subprocess.run(
+                [self.nodebuilder_path, wad_path, "-o", wad_path],
+                capture_output=True, text=True, timeout=60)
+        except OSError as e:
+            self.output.appendPlainText(f"erreur : impossible de lancer le nodebuilder : {e}")
+            return
+        except subprocess.TimeoutExpired:
+            self.output.appendPlainText("erreur : le nodebuilder n'a pas terminé après 60s, abandon")
+            return
+        if result.stdout:
+            self.output.appendPlainText(result.stdout.rstrip())
+        if result.stderr:
+            self.output.appendPlainText(result.stderr.rstrip())
+        if result.returncode != 0:
+            self.output.appendPlainText(f"le nodebuilder a rendu le code {result.returncode}")
+        else:
+            self.output.appendPlainText("nodebuilder : OK, WAD prêt à être chargé.")
+
+    def play_in_engine(self):
+        if not self.engine_path:
+            QMessageBox.warning(
+                self, "Moteur non configuré",
+                "Configurez le chemin d'un moteur Doom dans Paramètres > Configurer... avant "
+                "de pouvoir lancer un test.")
+            return
+        if not self.last_wad_path or not os.path.exists(self.last_wad_path):
+            QMessageBox.warning(
+                self, "Aucun WAD compilé",
+                "Compilez le script (Exécuter > Compiler vers .wad...) avant de le lancer dans "
+                "le moteur.")
+            return
+        try:
+            subprocess.Popen([self.engine_path, "-file", self.last_wad_path])
+        except OSError as e:
+            self.output.appendPlainText(f"erreur : impossible de lancer le moteur : {e}")
+            return
+        self.output.appendPlainText(f"lancé : {self.engine_path} -file {self.last_wad_path}")
+
+    def open_settings(self):
+        dialog = SettingsDialog(self.nodebuilder_path, self.engine_path, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.nodebuilder_path = dialog.nodebuilder_edit.text().strip()
+        self.engine_path = dialog.engine_edit.text().strip()
+        self.settings.setValue("nodebuilder_path", self.nodebuilder_path)
+        self.settings.setValue("engine_path", self.engine_path)
 
 
 def main():
