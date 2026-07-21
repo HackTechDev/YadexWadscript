@@ -109,6 +109,13 @@ skips the automatic nodebuilder pass (same as before this existed) and
 "Lancer dans le moteur" refuses with a clear message instead of
 launching nothing.
 
+**Fichier > Fichiers récents** lists the last 10 scripts opened or
+saved (most recent first, numbered `1` through `9` as mnemonics once
+the submenu is open), also persisted via `QSettings` across runs. A
+script whose file has since been moved or deleted is dropped from the
+list the moment opening it actually fails, rather than left to fail
+silently again on the next click; "Vider la liste" clears it outright.
+
 ## The idea
 
 The primary authoring unit is a **sector**: a closed polygon of (x,y)

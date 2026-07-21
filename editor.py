@@ -265,6 +265,7 @@ class MainWindow(QMainWindow):
         self.settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "wadscript", "editor")
         self.nodebuilder_path = self.settings.value("nodebuilder_path", "", str)
         self.engine_path = self.settings.value("engine_path", "", str)
+        self.recent_files = self._load_recent_files()
 
         self.editor = CodeEditor()
         self.editor.textChanged.connect(self._update_title)
@@ -306,6 +307,12 @@ class MainWindow(QMainWindow):
         self.open_action = file_menu.addAction("&Ouvrir...")
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(self.open_file)
+        # Rebuilt from scratch (see _refresh_recent_menu) every time
+        # recent_files changes -- self._recent_actions holds a live Python
+        # reference to whatever's currently in it, same GC gotcha as above.
+        self.recent_menu = file_menu.addMenu("Fichiers &récents")
+        self._recent_actions = []
+        self._refresh_recent_menu()
         self.save_action = file_menu.addAction("&Enregistrer")
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_file)
@@ -386,6 +393,72 @@ class MainWindow(QMainWindow):
             return
         self._load_file(path)
 
+    # -- recent files (Fichier > Fichiers récents) --
+
+    MAX_RECENT_FILES = 10
+
+    def _load_recent_files(self):
+        # QSettings can hand back a bare str instead of a one-element list
+        # (an ini-format quirk when exactly one value was ever stored), so
+        # this always normalizes to a list.
+        value = self.settings.value("recent_files", [])
+        if not value:
+            return []
+        if isinstance(value, str):
+            return [value]
+        return list(value)
+
+    def _save_recent_files(self):
+        self.settings.setValue("recent_files", self.recent_files)
+
+    def _add_recent_file(self, path):
+        path = os.path.abspath(path)
+        if path in self.recent_files:
+            self.recent_files.remove(path)
+        self.recent_files.insert(0, path)
+        del self.recent_files[self.MAX_RECENT_FILES:]
+        self._save_recent_files()
+        self._refresh_recent_menu()
+
+    def _remove_recent_file(self, path):
+        if path in self.recent_files:
+            self.recent_files.remove(path)
+            self._save_recent_files()
+            self._refresh_recent_menu()
+
+    def _clear_recent_files(self):
+        self.recent_files = []
+        self._save_recent_files()
+        self._refresh_recent_menu()
+
+    def _open_recent(self, path):
+        if not self._confirm_discard():
+            return
+        try:
+            self._load_file(path)
+        except OSError as e:
+            QMessageBox.warning(self, "Fichier introuvable", f"Impossible d'ouvrir {path!r} : {e}")
+            self._remove_recent_file(path)
+
+    def _refresh_recent_menu(self):
+        self.recent_menu.clear()
+        self._recent_actions = []  # keep a live reference -- see _build_actions
+        if not self.recent_files:
+            empty_action = self.recent_menu.addAction("(aucun)")
+            empty_action.setEnabled(False)
+            self._recent_actions.append(empty_action)
+            return
+        for i, path in enumerate(self.recent_files):
+            label = f"&{i + 1} {os.path.basename(path)}" if i < 9 else os.path.basename(path)
+            action = self.recent_menu.addAction(label)
+            action.setStatusTip(path)
+            action.triggered.connect(lambda checked=False, p=path: self._open_recent(p))
+            self._recent_actions.append(action)
+        self.recent_menu.addSeparator()
+        clear_action = self.recent_menu.addAction("Vider la liste")
+        clear_action.triggered.connect(self._clear_recent_files)
+        self._recent_actions.append(clear_action)
+
     def _load_file(self, path):
         with open(path, "r", encoding="utf-8") as f:
             self.editor.setPlainText(f.read())
@@ -394,6 +467,7 @@ class MainWindow(QMainWindow):
         self.editor.clear_error_line()
         self.output.clear()
         self._update_title()
+        self._add_recent_file(self.current_path)
 
     def save_file(self):
         if self.current_path is None:
@@ -402,6 +476,7 @@ class MainWindow(QMainWindow):
             f.write(self.editor.toPlainText())
         self.editor.document().setModified(False)
         self._update_title()
+        self._add_recent_file(self.current_path)
         return True
 
     def save_file_as(self):
