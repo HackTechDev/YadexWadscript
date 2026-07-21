@@ -28,6 +28,32 @@ ergonomie du langage) est sorti de ce fichier et vit dans
   itération. Un mot-clé optionnel du genre `repeat i 4 { ... }
   rotate 90` (autour d'un pivot à préciser) couvrirait ce cas sans
   transformer `repeat` en moteur géométrique complet.
+- **`floor`/`ceiling`/`light` expression-capables dans `repeat`.**
+  Restriction actuelle assumée (voir CHANGELOG.md, "Ergonomie du
+  langage") : seules les coordonnées sont expression-capables dans un
+  `repeat`, pas `floor`/`ceiling`/`tag`/textures. Ça oblige
+  `stairs.wsl` à dupliquer trois sectors presque identiques à la main
+  (chaque marche +8 en hauteur) au lieu d'un seul `repeat i 3 { sector
+  step_{i} { floor i * 8 ... } }`. Autoriser les expressions sur
+  `floor`/`ceiling`/`light` (en gardant `tag`/textures hors-scope, qui
+  ont besoin d'une valeur stable et pas d'un calcul) couvrirait
+  rampes, escaliers en spirale et dégradés de lumière sans dupliquer
+  de géométrie.
+- **Constantes nommées au niveau du script.** Les seuls noms valides
+  dans une expression aujourd'hui sont les variables de boucle d'un
+  `repeat` englobant (voir `parse_atom`, parser.py) — un script qui
+  répète la même largeur de couloir ou la même marge un peu partout
+  n'a que le copier-coller. Un `const HALL_WIDTH = 256` déclaré une
+  fois en tête de script et réutilisable dans toute expression de
+  coordonnée réduirait ce risque de dérive, sans toucher à la logique
+  des variables de `repeat` (qui resteraient prioritaires en cas de
+  collision de nom, comme `angle north` aujourd'hui).
+- **Opérateurs `/` et `%`.** `parse_term`/`parse_expr` (parser.py)
+  n'implémentent que `+`, `-`, `*` et la négation unaire — calculer un
+  centre (`largeur / 2`) ou répartir des éléments avec un motif
+  cyclique dans un `repeat` (`i % 3`) demande de sortir la
+  calculatrice avant d'écrire le script plutôt que d'exprimer le
+  calcul directement.
 
 ## Sortie multi-niveaux
 
@@ -41,6 +67,24 @@ ergonomie du langage) est sorti de ce fichier et vit dans
   (plusieurs fichiers `.wsl`, ou plusieurs blocs `map{}` dans un seul
   script, fusionnés en un PWAD multi-niveaux) plutôt que de fusionner
   les WADs à la main après coup.
+
+## Organisation de projet
+
+- **`include` capable de partager de la géométrie, pas seulement des
+  conventions.** `_parse_script(restricted=True)` (parser.py) n'admet
+  aujourd'hui que `defaults`/`texture_preset`/`include` imbriqué dans
+  un fichier inclus — c'est délibéré pour que l'ordre de fusion
+  n'ait jamais d'importance (contrairement à `offset relative_to`,
+  documenté comme distinction volontaire dans CHANGELOG.md). Un
+  niveau complexe reste forcément un seul gros fichier `.wsl` : rien
+  ne permet de découper ses `sector`/`edge`/`thing` en plusieurs
+  fichiers organisés par zone (une aile par fichier, par exemple),
+  contrairement aux conventions partagées (`common.wsl`) qui
+  fonctionnent déjà très bien pour ça. Un mot-clé distinct
+  d'`include` (pour ne pas relâcher sa garantie d'indépendance à
+  l'ordre) — `import "wing_east.wsl"`, par exemple — qui fusionnerait
+  aussi la géométrie propre du fichier importé serait utile pour les
+  niveaux qui dépassent la taille confortable d'un seul fichier.
 
 ## Outillage
 
