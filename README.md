@@ -2,7 +2,9 @@
 
 A small declarative DSL for describing Doom II level geometry
 procedurally, compiled to a classic Doom-format single-level PWAD.
-Standalone Python 3 tool, stdlib only.
+Standalone Python 3 tool, stdlib only — except for the optional GUI
+editor (`editor.py`, see [GUI editor](#gui-editor)), which needs
+[PySide6](https://pypi.org/project/PySide6/).
 
 Originally developed inside [Yadex](https://github.com/farhaven/yadex),
 a Doom/Doom II/Heretic/Hexen/Strife/ZDoom level editor for Unix/X11,
@@ -12,6 +14,7 @@ way to load and inspect the WAD files this tool produces (see
 [Quick start](#quick-start) below), which is why the two are linked.
 
 **Contents**: [Quick start](#quick-start) ·
+[GUI editor](#gui-editor) ·
 [The idea](#the-idea) ·
 [Language reference](#language-reference) ·
 [Advanced features](#advanced-features) ·
@@ -64,6 +67,33 @@ or most source ports — e.g.
 of this repo, `bsp <output>.wad -o <output>.wad` in place). Yadex
 itself can open and edit a node-less level fine, which is why it's the
 verification tool of choice here.
+
+## GUI editor
+
+`editor.py` is a small optional Qt text editor for `.wsl` scripts —
+the only part of this repo that isn't stdlib-only, since it needs
+[PySide6](https://pypi.org/project/PySide6/) (`pip install PySide6`):
+
+```sh
+python3 editor.py examples/three_rooms.wsl
+```
+
+Syntax highlighting (keywords, directions, strings, numbers, comments)
+and line numbers, plus two actions that call the exact same
+tokenize/parse/resolve pipeline `wadscript.py`'s CLI does — nothing
+about the language or the compiler is reimplemented for the GUI:
+
+- **Vérifier** (`Ctrl+Return`) runs the script and prints the resolved
+  vertex/linedef/sidedef/sector/thing tables in the output pane at the
+  bottom, the same as `--dump-geometry` — without writing anything.
+- **Compiler vers .wad...** (`Ctrl+B`) runs the script and writes a WAD
+  file (prompts for where). Needs the script saved to a real path
+  first, the same way `include`'s relative paths need one.
+
+Either action, on a `WsError`, prints `file:line: error: message` (the
+same format the CLI uses) to the output pane and jumps the editor to
+the offending line — the error's line number is never guessed twice in
+two different places.
 
 ## The idea
 
@@ -700,6 +730,7 @@ warnings, zero errors.
 
 ```
 wadscript.py     CLI entrypoint
+editor.py        optional Qt (PySide6) GUI editor for .wsl scripts
 lexer.py         source text -> tokens
 parser.py        tokens -> AST (also expands `repeat`, evaluates expressions,
                  and resolves `include`)
