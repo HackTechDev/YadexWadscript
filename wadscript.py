@@ -51,6 +51,10 @@ def main(argv=None):
     ap.add_argument("--check-textures", metavar="IWAD", default=None,
                      help="warn (non-fatal) about texture/flat names not found in this IWAD/PWAD's "
                           "TEXTURE1/TEXTURE2 and F_START..F_END lumps")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="seed the RNG backing random(min,max) in expressions, for reproducible "
+                          "output (default: a fresh, non-reproducible seed each run); a script that "
+                          "never calls random() is unaffected by this flag")
     args = ap.parse_args(argv)
 
     with open(args.input, "r", encoding="utf-8") as f:
@@ -58,7 +62,7 @@ def main(argv=None):
 
     try:
         tokens = tokenize(source)
-        script = parse(tokens, base_dir=os.path.dirname(os.path.abspath(args.input)))
+        script = parse(tokens, base_dir=os.path.dirname(os.path.abspath(args.input)), seed=args.seed)
         level = resolve(script, map_name_override=args.map_name)
     except WsError as e:
         print(e.format(args.input), file=sys.stderr)

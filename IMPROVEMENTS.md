@@ -10,51 +10,6 @@ ergonomie du langage) est sorti de ce fichier et vit dans
 [`CHANGELOG.md`](CHANGELOG.md) — ce fichier ne garde que ce qui reste
 à faire, pour rester court et à jour.
 
-## Génération procédurale
-
-- **Primitives aléatoires.** Le but affiché de wadscript est la
-  "géométrie procédurale", mais rien dans le langage n'introduit de
-  hasard : deux exécutions du même script produisent toujours
-  exactement le même niveau. Une fonction `random(min,max)` utilisable
-  dans les expressions (typiquement à l'intérieur d'un `repeat`, pour
-  varier une position ou un type de monstre) plus un flag `--seed
-  <n>` pour la reproductibilité ouvrirait la porte à une vraie
-  variation procédurale sans complexifier le cas simple (un script
-  sans `random()` resterait déterministe).
-- **Rotation/miroir pour `repeat`.** `repeat` ne fait que de la
-  translation via les expressions dans les coordonnées — dupliquer une
-  forme en la faisant pivoter (un donjon en étoile, une salle
-  symétrique) demande de recalculer les points à la main pour chaque
-  itération. Un mot-clé optionnel du genre `repeat i 4 { ... }
-  rotate 90` (autour d'un pivot à préciser) couvrirait ce cas sans
-  transformer `repeat` en moteur géométrique complet.
-- **`floor`/`ceiling`/`light` expression-capables dans `repeat`.**
-  Restriction actuelle assumée (voir CHANGELOG.md, "Ergonomie du
-  langage") : seules les coordonnées sont expression-capables dans un
-  `repeat`, pas `floor`/`ceiling`/`tag`/textures. Ça oblige
-  `stairs.wsl` à dupliquer trois sectors presque identiques à la main
-  (chaque marche +8 en hauteur) au lieu d'un seul `repeat i 3 { sector
-  step_{i} { floor i * 8 ... } }`. Autoriser les expressions sur
-  `floor`/`ceiling`/`light` (en gardant `tag`/textures hors-scope, qui
-  ont besoin d'une valeur stable et pas d'un calcul) couvrirait
-  rampes, escaliers en spirale et dégradés de lumière sans dupliquer
-  de géométrie.
-- **Constantes nommées au niveau du script.** Les seuls noms valides
-  dans une expression aujourd'hui sont les variables de boucle d'un
-  `repeat` englobant (voir `parse_atom`, parser.py) — un script qui
-  répète la même largeur de couloir ou la même marge un peu partout
-  n'a que le copier-coller. Un `const HALL_WIDTH = 256` déclaré une
-  fois en tête de script et réutilisable dans toute expression de
-  coordonnée réduirait ce risque de dérive, sans toucher à la logique
-  des variables de `repeat` (qui resteraient prioritaires en cas de
-  collision de nom, comme `angle north` aujourd'hui).
-- **Opérateurs `/` et `%`.** `parse_term`/`parse_expr` (parser.py)
-  n'implémentent que `+`, `-`, `*` et la négation unaire — calculer un
-  centre (`largeur / 2`) ou répartir des éléments avec un motif
-  cyclique dans un `repeat` (`i % 3`) demande de sortir la
-  calculatrice avant d'écrire le script plutôt que d'exprimer le
-  calcul directement.
-
 ## Sortie multi-niveaux
 
 - **Plusieurs cartes dans un seul PWAD.** `wadwriter.py` écrit

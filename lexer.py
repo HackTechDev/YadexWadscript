@@ -2,7 +2,7 @@
 
 Grammar is small and regular enough for a single hand-written scanner:
 identifiers, integers (signed), double-quoted strings, and the
-punctuation ( ) { } , - + *
+punctuation ( ) { } , - + * / % =
 
 The one wrinkle: '-' is both the edge-endpoint separator in
 `(x,y)-(x,y)` (and the arithmetic minus in a `repeat` expression) and
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from errors import WsParseError
 
-PUNCT_CHARS = "(){},+*"
+PUNCT_CHARS = "(){},+*/%="
 
 
 @dataclass

@@ -50,6 +50,11 @@ that don't actually exist in that IWAD/PWAD, e.g. a typo'd
 python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad --check-textures /path/to/doom2.wad
 ```
 
+`--seed <n>` makes `random(min,max)` (see "Random values" under
+[Advanced features](#advanced-features)) reproducible — the same seed
+always draws the same sequence. Irrelevant for a script that never
+calls `random()`, which always compiles to the same output regardless.
+
 **Important**: the WAD this tool produces has empty SEGS/SSECTORS/
 NODES/REJECT/BLOCKMAP lumps (same "needs rebuilding" convention Yadex
 itself uses for a level whose nodes are stale). Run an external
@@ -98,7 +103,8 @@ the same way here:
 
 ```
 script      := { statement } ;
-statement   := map_stmt | defaults_stmt | texture_preset_stmt | include_stmt
+statement   := map_stmt | defaults_stmt | texture_preset_stmt | const_stmt
+             | include_stmt
              | sector_stmt | edge_stmt | thing_stmt | repeat_stmt ;
 
 map_stmt      := "map" STRING ;                      -- required, exactly once
@@ -115,16 +121,20 @@ preset_field  := "upper" STRING | "lower" STRING | "middle" STRING
                 -- top-level only; see "Reusable texture presets" under
                    Advanced features
 
+const_stmt    := "const" IDENT "=" expr ;
+                -- top-level only; see "Named constants" under Advanced
+                   features
+
 include_stmt  := "include" STRING ;
                 -- top-level only; the included file may itself only
-                   contain defaults_stmt/texture_preset_stmt/include_stmt
-                   -- see "Sharing conventions across scripts (include)"
-                   under Advanced features
+                   contain defaults_stmt/texture_preset_stmt/const_stmt/
+                   include_stmt -- see "Sharing conventions across
+                   scripts (include)" under Advanced features
 
 sector_stmt   := "sector" IDENT "{" { sector_field } "}" ;
-sector_field  := "floor" INT | "ceiling" INT
+sector_field  := "floor" expr | "ceiling" expr
                 | "floor_flat" STRING | "ceiling_flat" STRING
-                | "light" INT
+                | "light" expr
                 | "special" (IDENT | "raw" INT)
                 | "tag" (INT | IDENT)
                 | "points" "{" point { point } "}"
@@ -150,13 +160,19 @@ angle_expr    := expr ;   -- but a bare `direction` is also a legal atom here
                              (unlike in a plain `expr`) -- see "Symbolic
                              directions" under Advanced features
 
-repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}" ;
-                 -- see "Repeated geometry (repeat)" under Advanced features
+repeat_stmt   := "repeat" IDENT INT "{" { sector_stmt | edge_stmt | thing_stmt | repeat_stmt } "}"
+                  [ "rotate" expr "around" point ] ;
+                 -- see "Repeated geometry (repeat)" and "Rotated repeats"
+                    under Advanced features
 
 expr          := term { ("+" | "-") term } ;
-term          := unary { "*" unary } ;
-unary         := "-" unary | INT | IDENT | "(" expr ")" ;
-                 -- a bare IDENT is only legal inside a repeat_stmt body
+term          := unary { ("*" | "/" | "%") unary } ;
+unary         := "-" unary | atom ;
+atom          := INT | IDENT | "random" "(" expr "," expr ")" | "(" expr ")" ;
+                 -- a bare IDENT is either a `const` name or (only inside a
+                    repeat_stmt body) one of its loop variables; see
+                    "Named constants" and "Random values" under Advanced
+                    features
 ```
 
 Comments start with `#` and run to end of line. Points may be listed in
@@ -343,15 +359,16 @@ repeat <var> <count> {
 Runs its body `count` times, with `<var>` bound to `0, 1, ..., count-1`
 each time. Inside the body (including a nested `repeat`'s own body),
 `<var>` — and any enclosing `repeat`'s variable — can be used in
-arithmetic expressions anywhere a coordinate is expected: a sector's
-`points{}`/`holes{}` and `offset (dx,dy)`, an edge's endpoint points,
-or a thing's `at (x,y)` and `angle`. Expressions support `+ - *` and
-parentheses, e.g. `(i * 128, j * 128 + 16)`.
+arithmetic expressions anywhere an `expr` is expected: a sector's
+`points{}`/`holes{}`, `offset (dx,dy)`, and `floor`/`ceiling`/`light`;
+an edge's endpoint points; or a thing's `at (x,y)` and `angle`.
+Expressions support `+ - * / %`, `random(min,max)`, and parentheses,
+e.g. `(i * 128, j * 128 + 16)` or `floor i * 8`.
 
-Only coordinates are expression-capable — `floor`, `ceiling`, `light`,
-`tag`, and texture names stay plain literals, the same on every
-iteration; this keeps `repeat` a geometry-layout tool, not a general
-templating language.
+`tag` and texture names stay plain literals, the same on every
+iteration — a `tag` identifies a specific sector/edge pairing, so
+letting it vary per iteration would defeat the point, and texture
+names aren't numbers to begin with.
 
 A `sector`'s name inside a `repeat` body automatically gets the
 enclosing iteration index (or indices, for nested repeats) appended —
@@ -366,6 +383,108 @@ edge-sharing derivation) from one nested `repeat`.
 munch, see `lexer.py`), write a space before a literal you're
 subtracting inside an expression — `i - 1`, not `i-1`, which instead
 lexes as the two tokens `i` and `-1` with no operator between them.
+
+### Named constants
+
+`const <name> = expr` declares a script-wide name for a value, resolved
+immediately (it may reference an earlier `const`, but not a `repeat`
+loop variable — none is in scope at the top level):
+
+```
+const HALL_WIDTH = 256
+const HALF_WIDTH = HALL_WIDTH / 2
+
+sector hall {
+  points { (0,0) (HALL_WIDTH,0) (HALL_WIDTH,HALL_WIDTH) (0,HALL_WIDTH) }
+}
+```
+
+A `const` is usable anywhere an `expr` is legal, including inside a
+`repeat` body — but if a `repeat`'s own loop variable shares its name,
+the loop variable wins (the same shadowing rule `angle north` already
+follows for a same-named loop variable). `const` is also allowed inside
+an `include`d file, alongside `defaults{}`/`texture_preset{}` — a
+duplicate name anywhere across a script and everything it includes
+(direct or nested) is an error, the same as a duplicate `defaults{}`.
+
+### Division and modulo
+
+`/` and `%` join `+ - *` in every `expr`. Both follow Python's own
+integer semantics (there are no fractional values in this DSL, every
+coordinate is an int): `/` truncates toward negative infinity, `%`
+always has the same sign as its right operand, and `(a / b) * b + a %
+b == a` always holds. Dividing or taking the modulo of anything by
+zero is a clear error rather than a crash. `%` is the usual way to make
+a `repeat` iteration alternate between two (or more) values, e.g.
+`light 160 + (i % 2) * 40` for every other step lit brighter — see
+[`examples/procedural.wsl`](examples/procedural.wsl).
+
+### Random values
+
+`random(min, max)` draws one integer from an inclusive range —
+anywhere an `expr` is legal, not just inside a `repeat`:
+
+```
+thing imp at (128, random(32, 224)) angle west
+```
+
+By default every run of `wadscript.py` draws from a fresh,
+non-reproducible seed, so a script using `random()` produces a
+different level each time — that's the point. Pass `--seed <n>` to
+make it reproducible (the same seed always draws the same sequence,
+regardless of how many `random()` calls came before it or which file —
+main script or `include`d — they're written in). **A script that never
+calls `random()` is completely unaffected by `--seed`**: it always
+compiles to byte-identical output, exactly as before this feature
+existed.
+
+`min > max` (e.g. `random(50, 10)`) is a clear error, not silently
+swapped or clamped.
+
+### Rotated repeats
+
+A `repeat` can end with `rotate <angle> around <point>` to turn its
+body into a rotationally-duplicated pattern instead of a purely
+translated one — a star-shaped layout, spokes around a hub, that kind
+of thing:
+
+```
+repeat i 4 {
+  sector arm { points { ... } }
+  thing imp at (...) angle west
+} rotate 90 around (0,0)
+```
+
+Iteration `i`'s own contribution (every sector's points/holes, every
+edge override's endpoints, every thing's position *and* facing angle)
+is rotated `<angle> * i` degrees around `<point>` — iteration 0 is
+never rotated, so it's exactly the geometry as written; iteration 1 is
+turned `<angle>` degrees, iteration 2 is turned `<angle> * 2`, and so
+on. Rotating a thing's facing angle by the same amount as its position
+is what makes "face back toward the hub" (or any other relative
+facing) come out correct on every arm without writing it out by hand
+four times.
+
+Rotations by an exact multiple of 90° are computed with exact integer
+arithmetic (a 4-armed or 2-armed layout, the common case, never drifts
+off the integer coordinate grid); any other angle is rounded to the
+nearest map unit, same as any two adjacent sectors that don't happen to
+land on exactly matching coordinates.
+
+**A sector using `offset relative_to` cannot appear inside a rotated
+`repeat`** — the anchor sector's bounding box isn't resolved until
+`geometry.py` runs, well after rotation has already been applied here
+in `parser.py` — a clear error is raised instead of silently ignoring
+the rotation or the offset. A literal `offset (dx,dy)` works fine (it's
+folded into the sector's points before rotating, same as if you'd
+written the shifted coordinates by hand). Nesting is supported: a
+nested `repeat` with no `rotate` of its own is rotated as a whole by
+whichever enclosing `repeat` does have one.
+
+See [`examples/procedural.wsl`](examples/procedural.wsl) for a
+four-armed star dungeon combining this with `const`, `/`, `%`,
+expression-valued `floor`/`ceiling`/`light`, and `random()` — every
+feature in this section, in one script.
 
 ### Symbolic tags
 
@@ -481,10 +600,12 @@ different layouts using the same defaults and door texture preset.
 Two passes happen before any of this, in `parser.py`, entirely outside
 `geometry.py`'s view: every `repeat` is expanded into concrete
 `sector`/`edge`/`thing` statements (loop variables substituted, sector
-names suffixed with the iteration index), and every coordinate
-expression is evaluated to a plain int. `geometry.py` never sees a
-`repeat` or an unevaluated expression, only ordinary int-valued AST
-nodes — as if the script had been written out longhand.
+names suffixed with the iteration index, `rotate` applied to each
+iteration's own contribution), and every `expr` — including a sector's
+`floor`/`ceiling`/`light`, a `const` reference, or a `random()` call —
+is evaluated to a plain int. `geometry.py` never sees a `repeat`, a
+`const`, an unevaluated expression, or a rotation, only ordinary
+int-valued AST nodes — as if the script had been written out longhand.
 
 1. **Offset, then validation + winding normalization.** A sector's
    `offset` (a literal translation, or one computed from an
@@ -562,8 +683,15 @@ what a real script looks like in practice:
   `light_effects.wsl`, and `flags.wsl` isolate on their own into one
   connected level, the same way `combat_arena.wsl`/`vault_complex.wsl`
   do for the features before them.
+- [`examples/procedural.wsl`](examples/procedural.wsl) — a four-armed
+  star dungeon: one arm (a rising staircase built with expression-
+  valued `floor`, a `random()`-jittered ambush guard, and a landing)
+  written out once and turned into four with `repeat ... rotate`.
+  Every feature under "Génération procédurale" in one script: `const`,
+  `/` and `%`, expression-valued `floor`/`ceiling`/`light`, `random()`,
+  and a rotated `repeat`.
 
-All three were verified the same way as every other example in this
+All four were verified the same way as every other example in this
 folder: `--dump-geometry` to check the resolved specials/tags/things
 by hand, loaded in Yadex, and node-built with BSP 5.2 — zero
 warnings, zero errors.
@@ -584,9 +712,9 @@ examples/        single_room.wsl, three_rooms.wsl, lift.wsl, lift_symbolic_tag.w
                  stairs.wsl, crusher.wsl, secret_and_hazard.wsl, donut.wsl,
                  dungeon_grid.wsl, offset_relative.wsl, teleport.wsl,
                  light_effects.wsl, flags.wsl -- each isolates one feature;
-                 combat_arena.wsl, vault_complex.wsl, and relay_station.wsl
-                 chain several together into a small level (see below);
-                 common.wsl + shared_level_a.wsl/shared_level_b.wsl
+                 combat_arena.wsl, vault_complex.wsl, relay_station.wsl, and
+                 procedural.wsl chain several together into a small level
+                 (see below); common.wsl + shared_level_a.wsl/shared_level_b.wsl
                  demonstrate `include`
 tests/           empty for now -- future pytest coverage would go here:
                   golden-byte tests for wadwriter.py, hand-computed

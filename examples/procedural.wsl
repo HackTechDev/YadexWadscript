@@ -1,0 +1,85 @@
+# procedural.wsl -- the five "Génération procédurale" features from
+# IMPROVEMENTS.md, all in one small four-armed star dungeon: a hub with
+# one arm written out once, then turned into four by `repeat ... rotate`.
+#
+# What's demonstrated, and where:
+#   - `const`: WIDTH/HALF below, reused for the hub and every arm so
+#     their shared walls line up without hand-copying the same number
+#     everywhere.
+#   - `/`: `HALF = WIDTH / 2`, an integer division (this DSL has no
+#     fractional numbers -- every coordinate is an int).
+#   - `%`: each step's `light` alternates between two levels via
+#     `s % 2`, a cheap "every other one" pattern.
+#   - `floor`/`ceiling`/`light` as expressions: the nested `repeat s 3`
+#     below raises each step's `floor` by `s * 8` -- a real staircase
+#     without hand-duplicating three near-identical sectors the way
+#     `stairs.wsl` has to (8 map units is within Doom's automatic
+#     step-up height, so no special/trigger is needed at all here).
+#   - `random(min,max)` + `--seed`: the ambush imp's y position and the
+#     soulsphere's x position both jitter a little per arm. Run this
+#     script twice with the same `--seed <n>` and every jitter comes out
+#     byte-identical; omit `--seed` (or change it) and they don't.
+#
+# `repeat i 4 { ... } rotate 90 around (0,0)` writes the arm once, going
+# east out of the hub, and turns it into four (east/north/west/south) --
+# iteration 0 is never rotated, so it's the exact geometry written
+# below; iterations 1-3 are that same geometry (steps, landing,
+# soulsphere, imp -- position *and* facing angle) turned 90/180/270
+# degrees around the hub's center. Because the hub is a square, every
+# one of its four sides is congruent, so each rotated arm's inner wall
+# still lines up exactly with the corresponding side of the (never
+# rotated) hub -- no `offset` involved anywhere in this script, since
+# `offset relative_to` can't be used inside a rotated `repeat` (see
+# README.md, "Rotated repeats").
+
+map "MAP01"
+
+defaults {
+  wall_texture "STARTAN3"
+}
+
+const WIDTH = 64
+const HALF = WIDTH / 2
+
+sector hub {
+  floor 0
+  ceiling 128
+  points { (-32,-32) (32,-32) (32,32) (-32,32) }
+}
+
+thing player1_start at (0,0) angle east
+
+repeat i 4 {
+  repeat s 3 {
+    sector step {
+      floor s * 8
+      ceiling 128
+      light 160 + (s % 2) * 40
+      points {
+        (HALF + s * 48, -HALF)
+        (HALF + (s + 1) * 48, -HALF)
+        (HALF + (s + 1) * 48, HALF)
+        (HALF + s * 48, HALF)
+      }
+    }
+  }
+
+  # Ambush guard on the last step before the landing -- y jitters a
+  # little per arm via random(), angle west faces back down toward the
+  # hub (rotated to face back toward the hub on every arm, same as the
+  # landing's soulsphere position jitter below).
+  thing imp at (HALF + 48 * 2 + 24, random(0 - HALF + 8, HALF - 8)) angle west flags { easy medium hard ambush }
+
+  sector landing {
+    floor 24
+    ceiling 160
+    points {
+      (HALF + 48 * 3, -HALF)
+      (HALF + 48 * 3 + 96, -HALF)
+      (HALF + 48 * 3 + 96, HALF)
+      (HALF + 48 * 3, HALF)
+    }
+  }
+
+  thing soulsphere at (HALF + 48 * 3 + 48 + random(0 - 8, 8), 0) angle east
+} rotate 90 around (0,0)

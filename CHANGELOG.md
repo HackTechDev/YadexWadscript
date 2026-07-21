@@ -116,3 +116,73 @@ include -- all produce clear, nested `file:line` messages. See
 README.md ("Sharing conventions across scripts (include)") and
 `examples/common.wsl` + `examples/shared_level_a.wsl`/
 `shared_level_b.wsl` (two different levels sharing one `common.wsl`).
+
+## Génération procédurale
+
+Five additions, all landing together since they share the same
+underlying mechanism (`parser.py`'s materialization step, which already
+turns `repeat` + `expr` into concrete int-valued AST nodes before
+`geometry.py` ever runs):
+
+**`/` and `%`** join `+ - *` in every `expr` (`parse_term`), with
+Python's own integer semantics -- `/` truncates toward negative
+infinity, `%` matches the sign of its right operand, division/modulo
+by zero is a clear `WsParseError` instead of a crash.
+
+**`const <name> = expr`**, a new top-level statement (also legal inside
+an `include`d file, alongside `defaults{}`/`texture_preset{}`),
+resolved immediately and then usable anywhere an `expr` is legal
+exactly like a plain integer literal -- a `repeat` loop variable of the
+same name still shadows it, same precedence a same-named direction
+word already had. Duplicate detection spans the whole include tree,
+the same as a duplicate `defaults{}`.
+
+**`floor`/`ceiling`/`light` are now `expr`-valued** on a `sector{}`
+(still plain `INT` on `defaults{}`, which has no `repeat` context to
+speak of), closing the one gap `repeat`'s original "only coordinates
+are expression-capable" restriction left: a `repeat`-generated
+staircase can now write `floor s * 8` once instead of hand-duplicating
+one near-identical sector per step, the way `stairs.wsl` still does.
+
+**`random(min, max)`**, a new expression atom (`parse_atom`, recognized
+by the `(` immediately following `random` so it never shadows a
+same-named `const`/loop variable used without a call), draws one
+inclusive integer from the script's shared RNG -- shared across an
+entire `include` chain (the same `random.Random` instance is threaded
+through every `_Parser`, top-level and included), so the draw sequence
+only depends on `--seed` and call order, never on which file a
+`random()` happens to be written in. `min > max` is a clear error, not
+a silent swap or clamp. New `wadscript.py` flag `--seed <n>` seeds it;
+omitted, every run draws from a fresh, non-reproducible seed. A script
+that never calls `random()` is completely unaffected either way --
+verified by diffing `--dump-geometry` output across repeated runs of
+every existing example with no `random()` call, byte-identical every
+time.
+
+**`repeat ... rotate <angle> around <point>`**: iteration `i`'s own
+contribution (every sector's points/holes, every edge override's
+endpoints, every thing's position *and* facing angle) is rotated
+`<angle> * i` degrees around `<point>` after that iteration's own body
+is fully materialized (including any nested `repeat`, rotated or not,
+resolved first) -- iteration 0 is always left exactly as written.
+Multiples of 90 degrees use exact integer rotation (`dx, dy = -dy, dx`
+per quarter-turn) so the common 4-fold/2-fold case never drifts off
+the integer coordinate grid; any other angle rounds to the nearest map
+unit. A sector using `offset relative_to` inside a rotated `repeat` is
+a clear error (its anchor's bounding box isn't resolved until
+`geometry.py` runs, well after rotation already happened here) -- a
+literal `offset (dx,dy)` is folded into the sector's points before
+rotating instead, so `geometry.py` never has to know rotation exists
+at all.
+
+See README.md ("Named constants", "Division and modulo", "Random
+values", "Rotated repeats") and
+[`examples/procedural.wsl`](examples/procedural.wsl) -- a four-armed
+star dungeon combining all five: `const`/`/` for a shared, halved
+corridor width, a `repeat`-built rising staircase with `expr`-valued
+`floor` and `%`-alternating `light`, a `random()`-jittered ambush guard
+and soulsphere per arm, and the whole arm turned into four with
+`rotate 90 around (0,0)`. Verified the same way as every other example
+in this folder: `--dump-geometry` (including a `--seed`-reproducibility
+check), `--check-textures` against a real `doom2.wad`, BSP 5.2 node-
+building, and a Yadex load -- zero warnings, zero errors.
