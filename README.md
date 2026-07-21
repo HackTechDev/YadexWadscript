@@ -27,14 +27,15 @@ way to load and inspect the WAD files this tool produces (see
 
 ```sh
 python3 wadscript.py examples/three_rooms.wsl -o /tmp/out.wad -m MAP01
-/path/to/yadex/obj/0/yadex -g doom2 -pw /tmp/out.wad
-# at the "yadex:" prompt: e map01
+/path/to/yadex/obj/0/yadex -g doom2 -pw /tmp/out.wad -map MAP01
 ```
 
 (`obj/0/yadex` is Yadex's own build output — see
 [github.com/farhaven/yadex](https://github.com/farhaven/yadex) for how
 to build it; wadscript doesn't need Yadex installed to run, only to
-visually inspect what it produces.)
+visually inspect what it produces. `-map MAP01` loads that level
+automatically at startup — without it, Yadex instead sits at its own
+"yadex:" prompt, needing `e map01` typed by hand.)
 
 `--dump-geometry` prints the resolved vertex/linedef/sidedef/sector/
 thing tables instead of writing a WAD — useful for sanity-checking a
@@ -97,11 +98,13 @@ about the language or the compiler is reimplemented for the GUI:
   recently compiled WAD — plus `-iwad <iwad>` first, if an IWAD is
   configured.
 - **Ouvrir dans l'éditeur de niveau** (`Ctrl+E`) launches the configured
-  level editor (e.g. Yadex) as `<editor> <wad>` on the most recently
-  compiled WAD — Yadex itself accepts a bare PWAD path this way (see
-  [Quick start](#quick-start)), no `-g`/`-pw` needed unless an IWAD is
-  configured, in which case it's `<editor> -g doom2 -i2 <iwad> <wad>`
-  (Yadex's own flags for "game" and "Doom II/Final Doom iwad").
+  level editor (e.g. Yadex) as `<editor> -map <level> <wad>` on the
+  most recently compiled WAD, `<level>` being the script's own `map
+  "..."` name — Yadex's `-map` loads that level automatically at
+  startup instead of leaving it to type `e <level_name>` itself at
+  Yadex's own prompt (see [Quick start](#quick-start)). Plus `-g doom2
+  -i2 <iwad>` first (Yadex's own flags for "game" and "Doom II/Final
+  Doom iwad") if an IWAD is configured.
 
 Either of the first two actions, on a `WsError`, prints
 `file:line: error: message` (the same format the CLI uses) to the

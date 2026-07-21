@@ -27,7 +27,9 @@ Yadex), and to an IWAD, persisted across runs via QSettings. Once
 configured, "Lancer dans le moteur" / "Ouvrir dans l'éditeur de niveau"
 launch them on the most recently compiled (and node-built) WAD, passing
 the IWAD along (`-iwad` for the engine, Yadex's own `-g doom2 -i2` for
-the level editor) if one is set.
+the level editor) if one is set, and (for the level editor) `-map
+<level>` so Yadex opens straight into the level instead of sitting at
+its own "yadex:" startup prompt.
 """
 
 import io
@@ -270,6 +272,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.current_path = None
         self.last_wad_path = None
+        self.last_map_name = None
         self.settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "wadscript", "editor")
         self.nodebuilder_path = self.settings.value("nodebuilder_path", "", str)
         self.engine_path = self.settings.value("engine_path", "", str)
@@ -573,6 +576,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         self.last_wad_path = path
+        self.last_map_name = level.map_name
         try:
             write_wad(path, level)
         except OSError as e:
@@ -655,6 +659,10 @@ class MainWindow(QMainWindow):
         # and this action is documented as launching Yadex specifically.
         if self.iwad_path:
             args += ["-g", "doom2", "-i2", self.iwad_path]
+        # -map auto-loads the level instead of leaving the user to type
+        # "e <level_name>" themselves at Yadex's own startup prompt.
+        if self.last_map_name:
+            args += ["-map", self.last_map_name]
         args.append(self.last_wad_path)
         try:
             subprocess.Popen(args)
