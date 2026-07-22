@@ -303,6 +303,53 @@ secteurs, nom de thing/special inconnu sans `raw`, texture de plus de 8
 caractères...) sont listées dans [README.md](README.md#known-v1-limitations)
 et la section validation du plan d'origine.
 
+## Étape 10 — Décompiler un WAD existant (wad2wsl.py)
+
+`wad2wsl.py` fait le chemin inverse de `wadscript.py` : il lit un WAD
+Doom/Doom II à un seul niveau et écrit un fichier `.wsl` qui se
+recompile vers la même géométrie. Utile pour repartir d'un niveau
+existant (le vôtre, ou un niveau tiers) plutôt que de tout redécrire à
+la main :
+
+```sh
+python3 wad2wsl.py tuto.wad -o /tmp/tuto_decompile.wsl
+python3 wadscript.py /tmp/tuto_decompile.wsl -o /tmp/tuto_roundtrip.wad -m MAP01
+```
+
+`--map MAP01` précise quel niveau décompiler si le WAD en contient
+plusieurs (par défaut : le seul présent, ou une erreur s'il y en a
+plusieurs sans `--map`).
+
+Un WAD ne stocke que des LINEDEFS/SIDEDEFS (murs et côtés), pas des
+polygones de secteur — l'inverse du modèle de wadscript, où c'est le
+polygone qui est premier. `wad2wsl.py` reconstruit donc chaque
+polygone de secteur en regroupant les murs par secteur puis en
+retraçant les boucles fermées, exactement l'inverse de ce que fait
+`geometry.py` à la compilation. Les specials/things/flags connus de
+`tables.py` sont retraduits en noms symboliques (`door_use`,
+`zombieman`, ...) plutôt que laissés en entiers bruts ; ce qui n'est
+pas dans la table ressort en `raw <int>`, la même échappatoire que
+`wadscript.py` accepte en entrée.
+
+**Cas particulier** : un secteur Doom dont la géométrie réelle est
+faite de plusieurs morceaux totalement séparés (pas imbriqués) mais
+partageant un même numéro de secteur — cas légal dans un WAD, mais
+qu'un seul bloc `sector{}` ne peut pas exprimer avec `points{}`/
+`holes{}` (qui ne fait que soustraire une zone *à l'intérieur* du
+contour extérieur) — est scindé en plusieurs blocs `sector{}`
+(`s<N>`, `s<N>b`, ...) aux attributs identiques, avec un avertissement
+affiché à chaque fois que ça arrive.
+
+**Important** : comme pour la sortie de `wadscript.py`, repassez le
+résultat par un nodebuilder externe (voir l'étape 3) avant de le
+charger dans un port source ou `doom2.exe` — `wad2wsl.py` ne récupère
+que le source DSL, pas les lumps NODES/SSECTORS/etc., que
+`wadscript.py` laisse de toute façon toujours vides.
+
+Voir la section ["Decompiling a WAD back to .wsl
+(wad2wsl.py)"](README.md#decompiling-a-wad-back-to-wsl-wad2wslpy) de
+README.md pour le détail de l'algorithme.
+
 ## Pour aller plus loin
 
 - Référence complète de la grammaire, des tables symboliques et de
