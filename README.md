@@ -14,6 +14,7 @@ way to load and inspect the WAD files this tool produces (see
 [Quick start](#quick-start) below), which is why the two are linked.
 
 **Contents**: [Quick start](#quick-start) ·
+[Decompiling a WAD back to .wsl (wad2wsl.py)](#decompiling-a-wad-back-to-wsl-wad2wslpy) ·
 [GUI editor](#gui-editor) ·
 [The idea](#the-idea) ·
 [Language reference](#language-reference) ·
@@ -68,6 +69,60 @@ or most source ports — e.g.
 of this repo, `bsp <output>.wad -o <output>.wad` in place). Yadex
 itself can open and edit a node-less level fine, which is why it's the
 verification tool of choice here.
+
+## Decompiling a WAD back to .wsl (wad2wsl.py)
+
+`wad2wsl.py` is the reverse direction of `wadscript.py`: it reads a
+single-level Doom/Doom II PWAD and writes a `.wsl` source file that
+recompiles (via `wadscript.py`) to the same geometry.
+
+```sh
+python3 wad2wsl.py input.wad -o output.wsl
+python3 wadscript.py output.wsl -o roundtrip.wad -m MAP01
+```
+
+`--map MAP01` picks which level to decompile if the WAD holds more
+than one (`THINGS`/`LINEDEFS`/.../`BLOCKMAP` following a level marker
+lump); by default it decompiles the WAD's only level, or errors if
+there's more than one and `--map` wasn't given.
+
+A WAD only stores LINEDEFS (two vertex indices plus a front sidedef,
+and optionally a back sidedef) and SIDEDEFS (which sector each
+belongs to) — the opposite of wadscript's own `points{}`-first model.
+`wad2wsl.py` reconstructs each sector's polygon by grouping every
+linedef's directed edge (`v1 -> v2` to its front sidedef's sector,
+`v2 -> v1` to its back sidedef's sector, if any — Doom's own
+convention that a sidedef's sector lies to the right of that
+direction) and tracing closed loops sector by sector, always taking
+the next edge in clockwise order at a branching vertex (the standard
+"rightmost turn" rule for extracting faces from a planar edge set).
+The result is exactly the polygon(s) `wadscript.py` would derive back
+into the same linedefs — a sector with one nested loop becomes a
+`holes{}` block, the same as `examples/donut.wsl`.
+
+A Doom sector whose true geometry is several wholly disjoint pieces
+sharing one sector number (legal WAD data, but not something a single
+`sector{}` block's `points{}`/`holes{}` can express, since `holes{}`
+only subtracts area nested *inside* the outer polygon) is split into
+several `sector{}` blocks with identical floor/ceiling/light/etc.
+attributes (`s<N>`, `s<N>b`, `s<N>c`, ...) — a printed warning flags
+whenever this happens, since a special that targets that sector index
+directly (rather than by `tag`) would then only affect one of the
+split pieces.
+
+Special/thing-type/flag numeric IDs are mapped back to `tables.py`'s
+symbolic names where a curated entry exists, falling back to the same
+`raw <int>` escape hatch `wadscript.py` itself accepts for anything
+that isn't in those tables. Sector/linedef entries never reached by
+any linedef in the level (dead data left over from iterative editing
+in the original level editor) are silently dropped rather than
+decompiled into empty output.
+
+**Important**: same as `wadscript.py`'s own output, round-trip the
+result through an external nodebuilder (see [Quick start](#quick-start))
+before it's playable — `wad2wsl.py` only recovers the DSL source, not
+the WAD's NODES/SSECTORS/etc., which `wadscript.py` always writes
+empty anyway.
 
 ## GUI editor
 
@@ -782,6 +837,7 @@ warnings, zero errors.
 
 ```
 wadscript.py     CLI entrypoint
+wad2wsl.py       reverse CLI: decompiles a Doom PWAD back into a .wsl source file
 editor.py        optional Qt (PySide6) GUI editor for .wsl scripts
 lexer.py         source text -> tokens
 parser.py        tokens -> AST (also expands `repeat`, evaluates expressions,
