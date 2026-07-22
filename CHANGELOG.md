@@ -186,3 +186,36 @@ and soulsphere per arm, and the whole arm turned into four with
 in this folder: `--dump-geometry` (including a `--seed`-reproducibility
 check), `--check-textures` against a real `doom2.wad`, BSP 5.2 node-
 building, and a Yadex load -- zero warnings, zero errors.
+
+## Décompilation (`wad2wsl.py`)
+
+New standalone CLI, the reverse direction of `wadscript.py`: reads a
+single-level Doom/Doom II PWAD and writes a `.wsl` source file that
+recompiles to the same geometry. `geometry.py` derives a sector's
+linedefs from its `points{}`/`holes{}` polygons; `wad2wsl.py` inverts
+that by grouping each linedef's directed edge (`v1 -> v2` to its front
+sidedef's sector, `v2 -> v1` to its back sidedef's sector -- Doom's own
+"sector lies to the right" convention, the same one `geometry.py`'s
+own `_derive_edges` relies on) by sector index, then tracing closed
+loops with the standard "rightmost turn" rule at branching vertices
+(planar-graph face tracing) to recover each sector's polygon(s).
+Loops are classified into an outer boundary plus nested holes by
+largest-area-first containment testing; a sector whose true geometry
+is several wholly disjoint pieces sharing one sector number (legal WAD
+data, but not expressible in one `points{}`/`holes{}` block) is split
+into several `sector{}` blocks with identical attributes (`s<N>`,
+`s<N>b`, ...), with a warning printed whenever this happens. Special/
+thing-type/flag numeric IDs are reverse-mapped through `tables.py`
+back to symbolic names, falling back to `raw <int>` for anything
+outside the curated tables; sector/sidedef entries never reached by
+any linedef (dead data from iterative editing in the original WAD) are
+silently dropped rather than decompiled into empty output.
+
+Validated on a real procedurally-generated WAD (`map01.wad`: 1468
+vertices, 1468 linedefs, 367 reachable sectors) with an independent
+structural diff -- comparing the raw WAD's vertex/edge/attribute data
+against the `LevelData` produced by recompiling the generated `.wsl`
+through wadscript's own lexer/parser/geometry pipeline -- confirming
+exact equality, not just "it compiled without errors"; also node-built
+with BSP 5.2 with zero errors. See README.md ("Decompiling a WAD back
+to .wsl (wad2wsl.py)").
