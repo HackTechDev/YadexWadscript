@@ -73,7 +73,25 @@ verification tool of choice here.
 
 `editor.py` is a small optional Qt text editor for `.wsl` scripts —
 the only part of this repo that isn't stdlib-only, since it needs
-[PySide6](https://pypi.org/project/PySide6/) (`pip install PySide6`):
+[PySide6](https://pypi.org/project/PySide6/):
+
+```sh
+python3 -m venv venv
+source venv/bin/activate
+pip install PySide6
+```
+
+(On Debian/Ubuntu, installing outside a venv may refuse with
+`externally-managed-environment` — use a venv as above, or add
+`--break-system-packages` to the `pip install` line.)
+
+On Linux, Qt 6.5+ also needs the system library `libxcb-cursor0` to load
+its `xcb` platform plugin — without it, `editor.py` fails at startup
+with `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`:
+
+```sh
+sudo apt install libxcb-cursor0
+```
 
 ```sh
 python3 editor.py examples/three_rooms.wsl
